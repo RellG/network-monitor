@@ -967,7 +967,7 @@
                      <div class="platform-status">
                          <h4>
                              <i class="fas fa-network-wired"></i>
-                             Cyphor Ecosystem
+                             Connected Platforms
                          </h4>
                          <div id="platform-status-list">
                              <div class="platform-item">
@@ -991,7 +991,7 @@
              let autoRefresh = true;
              let aiInsightsEnabled = true;
              let deviceHistory = {};
-             let deviceStates = {}; // Track online/offline states for homelab
+             let deviceStates = {}; // Track online/offline states for alerting
              let deviceUptime = {}; // Track device uptime
              let aiData = null;
              let platformData = null;
@@ -1000,10 +1000,12 @@
              let activeCategory = 'all';
              const HISTORY_POINTS = 50;
 
-             // MCP & Homelab Server Configuration (All integrations are optional and non-disruptive)
-             const MCP_SERVER_URL = 'http://192.168.4.154:8080'; // Your Nexus Universal MCP Server
-             const CYPHORLOGS_URL = 'http://192.168.4.154:3000'; // CyphorLogs integration (optional)
-             const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1408865085174055053/Et5nkphEd3qitJ1N9jlLUBGA1GJgp1SV7_I5qTRVTjpZpWGtUkqTKusuhAMdnm0YV41J'; // Discord alerts
+             // Optional Server Configuration (All integrations are optional and non-disruptive)
+             // These will be loaded from backend API endpoint which reads environment variables
+             let AI_SERVER_URL = '';
+             let LOGGING_SERVER_URL = '';
+             let WEBHOOK_URL = '';
+             let PLATFORM_URLS = {};
 
              // DOM elements
              const timestampEl = document.getElementById('timestamp');
@@ -1094,15 +1096,15 @@
                  }, 3000);
              }
 
-             // CyphorLogs Integration - Send network events to logging system (NON-DISRUPTIVE)
+             // Logging Integration - Send network events to external logging system (NON-DISRUPTIVE)
              async function logNetworkEvent(event_type, data) {
-                 if (!CYPHORLOGS_URL) return; // Skip if not configured
-                 
+                 if (!LOGGING_SERVER_URL) return; // Skip if not configured
+
                  try {
                      const controller = new AbortController();
                      setTimeout(() => controller.abort(), 1000); // 1 second timeout
-                     
-                     await fetch(`${CYPHORLOGS_URL}/api/events`, {
+
+                     await fetch(`${LOGGING_SERVER_URL}/api/events`, {
                          method: 'POST',
                          headers: { 'Content-Type': 'application/json' },
                          body: JSON.stringify({
@@ -1117,25 +1119,25 @@
                      // COMPLETELY SILENT - never disrupts main functionality
                      // Only log to console in debug mode
                      if (window.location.search.includes('debug=1')) {
-                         console.debug('CyphorLogs unavailable:', error);
+                         console.debug('Logging server unavailable:', error);
                      }
                  }
              }
 
-             // Discord Integration - Send alerts to Discord (NON-DISRUPTIVE)
-             async function sendDiscordAlert(title, message, color = 3447003) {
-                 if (!DISCORD_WEBHOOK_URL) return; // Skip if not configured
-                 
+             // Webhook Integration - Send alerts to webhook (NON-DISRUPTIVE)
+             async function sendWebhookAlert(title, message, color = 3447003) {
+                 if (!WEBHOOK_URL) return; // Skip if not configured
+
                  try {
                      const controller = new AbortController();
                      setTimeout(() => controller.abort(), 2000); // 2 second timeout
-                     
-                     await fetch(DISCORD_WEBHOOK_URL, {
+
+                     await fetch(WEBHOOK_URL, {
                          method: 'POST',
                          headers: { 'Content-Type': 'application/json' },
                          body: JSON.stringify({
                              embeds: [{
-                                 title: `🏠 Homelab Alert: ${title}`,
+                                 title: `🌐 Network Alert: ${title}`,
                                  description: message,
                                  color: color,
                                  timestamp: new Date().toISOString(),
@@ -1418,20 +1420,15 @@
                  `;
              }
 
-             // Fetch AI insights from MCP server
+             // Fetch AI insights
              async function fetchAIInsights() {
                  if (!aiInsightsEnabled) return;
 
                  aiLoadingEl.style.display = 'inline-block';
 
                  try {
-                     // Note: In a real implementation, you'd call the MCP server
-                     // For now, we'll simulate the AI analysis with actual network data
-
-                     // Simulate MCP AI analysis call
-                     const mockAIResponse = await simulateMCPAnalysis();
-
-                     aiData = mockAIResponse;
+                     const aiResponse = await performAIAnalysis();
+                     aiData = aiResponse;
                      updateAIInterface();
 
                  } catch (error) {
@@ -1442,45 +1439,45 @@
                  }
              }
 
-             // Real Nexus MCP AI Analysis for Homelab
-             async function simulateMCPAnalysis() {
+             // AI Analysis with Optional External Server Integration
+             async function performAIAnalysis() {
                  try {
-                     // Try real MCP call first
-                     const mcpResponse = await fetch(`${MCP_SERVER_URL}/api/tools/analyze_network`, {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({
-                             name: 'analyze_homelab_network',
-                             arguments: {
-                                 devices: Object.keys(deviceHistory),
-                                 latency_data: deviceHistory,
-                                 homelab: true,
-                                 environment: 'raspberrypi'
+                     // Try external AI server if configured
+                     if (AI_SERVER_URL) {
+                         const aiResponse = await fetch(`${AI_SERVER_URL}/api/tools/analyze_network`, {
+                             method: 'POST',
+                             headers: { 'Content-Type': 'application/json' },
+                             body: JSON.stringify({
+                                 name: 'analyze_network',
+                                 arguments: {
+                                     devices: Object.keys(deviceHistory),
+                                     latency_data: deviceHistory
+                                 }
+                             }),
+                             signal: AbortSignal.timeout(5000)
+                         });
+
+                         if (aiResponse.ok) {
+                             const aiData = await aiResponse.json();
+                             if (aiData.success) {
+                                 // Log successful AI analysis
+                                 logNetworkEvent('ai_analysis', {
+                                     score: aiData.network_score,
+                                     status: aiData.status,
+                                     recommendations: aiData.recommendations?.length || 0
+                                 });
+                                 return aiData;
                              }
-                         }),
-                         signal: AbortSignal.timeout(5000)
-                     });
-                     
-                     if (mcpResponse.ok) {
-                         const mcpData = await mcpResponse.json();
-                         if (mcpData.success) {
-                             // Log successful MCP analysis
-                             logNetworkEvent('mcp_analysis', { 
-                                 score: mcpData.network_score, 
-                                 status: mcpData.status,
-                                 recommendations: mcpData.recommendations?.length || 0
-                             });
-                             return mcpData;
                          }
                      }
                  } catch (error) {
-                     console.log('MCP server unavailable, using local AI analysis:', error);
-                     // Log MCP unavailability (non-disruptive)
-                     logNetworkEvent('mcp_fallback', { reason: error.message.substring(0, 100) });
+                     console.log('External AI server unavailable, using local analysis:', error);
+                     // Log AI server unavailability (non-disruptive)
+                     logNetworkEvent('ai_fallback', { reason: error.message.substring(0, 100) });
                  }
 
-                 // Enhanced local analysis for homelab (fallback)
-                 await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay
+                 // Local AI analysis (fallback)
+                 await new Promise(resolve => setTimeout(resolve, 500));
 
                  // Calculate network score based on current devices
                  let totalLatency = 0;
@@ -1521,12 +1518,11 @@
                      recommendations.push('All monitored devices showing good connectivity');
                  }
 
-                 // Simulate platform discovery
-                 const platforms = {
-                     'LatencyMonitor': { url: 'http://192.168.4.129:8082', status: 'online' },
-                     'CyphorLogs': { url: 'http://192.168.4.154:3000', status: 'online' },
-                     'MCP Server': { url: 'http://192.168.4.154:8080', status: 'online' }
-                 };
+                 // Build platform list from configured URLs
+                 const platforms = {};
+                 if (PLATFORM_URLS.monitor) platforms['Network Monitor'] = { url: PLATFORM_URLS.monitor, status: 'online' };
+                 if (PLATFORM_URLS.logs) platforms['Logging Server'] = { url: PLATFORM_URLS.logs, status: 'online' };
+                 if (PLATFORM_URLS.ai) platforms['AI Server'] = { url: PLATFORM_URLS.ai, status: 'online' };
 
                  return {
                      ai_insights: {
@@ -1633,14 +1629,14 @@
                          // Send Discord alert on state change (non-disruptive)
                          if (previousState !== undefined && previousState !== device.reachable) {
                              if (device.reachable) {
-                                 sendDiscordAlert(
+                                 sendWebhookAlert(
                                      `Device Online: ${name}`, 
                                      `📱 ${name} (${device.ip}) is back online with ${device.latency.toFixed(1)}ms latency`,
                                      65280 // Green color
                                  );
                                  logNetworkEvent('device_online', { name, ip: device.ip, latency: device.latency });
                              } else {
-                                 sendDiscordAlert(
+                                 sendWebhookAlert(
                                      `Device Offline: ${name}`, 
                                      `🔴 ${name} (${device.ip}) has gone offline`,
                                      16711680 // Red color
@@ -1659,7 +1655,7 @@
                              if (device.latency > 200 && deviceHistory[name].length > 5) {
                                  const avg = deviceHistory[name].reduce((a, b) => a + b, 0) / deviceHistory[name].length;
                                  if (avg > 150) {
-                                     sendDiscordAlert(
+                                     sendWebhookAlert(
                                          `High Latency: ${name}`,
                                          `⚠️ ${name} showing consistently high latency: ${device.latency.toFixed(1)}ms (avg: ${avg.toFixed(1)}ms)`,
                                          16776960 // Orange color
@@ -1800,26 +1796,46 @@
                  if (autoRefresh) updateData();
              }, 2000);
 
+             // Load configuration from backend API
+             async function loadConfig() {
+                 try {
+                     const response = await fetch('/api/config');
+                     if (response.ok) {
+                         const config = await response.json();
+                         AI_SERVER_URL = config.ai_server_url || '';
+                         LOGGING_SERVER_URL = config.logging_server_url || '';
+                         WEBHOOK_URL = config.webhook_url || '';
+                         PLATFORM_URLS = config.platform_urls || {};
+                     }
+                 } catch (error) {
+                     console.log('Config loading failed, using defaults:', error);
+                 }
+             }
+
              // Initial AI insights fetch
              setTimeout(() => {
                  fetchAIInsights();
              }, 3000); // Delay initial AI fetch to let devices load first
 
-             // Send startup notification to Discord (non-disruptive)
-             sendDiscordAlert(
-                 'LatencyMonitor Started', 
-                 '🚀 Homelab LatencyMonitor with AI enhancements and new features is now online!\n\n✨ New Features:\n📊 Network Topology Map\n⏰ Quiet Hours Mode\n🌙 Dark/Light Theme Toggle\n📍 Device Categories\n🎮 Device Uptime Tracking',
+             // Send startup notification via webhook (non-disruptive)
+             sendWebhookAlert(
+                 'LatencyMonitor Started',
+                 '🚀 Network LatencyMonitor with AI enhancements is now online!\n\n✨ Features:\n📊 Network Topology Map\n⏰ Quiet Hours Mode\n🌙 Dark/Light Theme Toggle\n📍 Device Categories\n🎮 Device Uptime Tracking',
                  3447003 // Blue color
              );
 
              // Initial setup
-             checkQuietHours();
-             
+             async function initialize() {
+                 await loadConfig();
+                 checkQuietHours();
+                 updateData();
+             }
+
              // Check quiet hours every minute
              setInterval(checkQuietHours, 60000);
 
-             // Initial load
-             updateData();
+             // Start the application
+             initialize();
          </script>
      </body>
      </html>

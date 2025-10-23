@@ -1,21 +1,22 @@
-# 🏠 Homelab LatencyMonitor - AI Enhanced Network Monitoring Platform
+# 🌐 LatencyMonitor - AI-Enhanced Network Monitoring Platform
 
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](http://ping.rellcloud.online:8082)
-[![AI](https://img.shields.io/badge/AI-Enhanced-purple?logo=brain)](https://github.com/RellG/nexus-mcp)
-[![Discord](https://img.shields.io/badge/Discord-Alerts-7289da?logo=discord)](#)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](#docker-deployment-recommended)
+[![AI](https://img.shields.io/badge/AI-Enhanced-purple)](#ai-powered-intelligence)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
-A **next-generation network monitoring platform** built for homelabs, featuring AI-powered insights, real-time topology mapping, and seamless integrations with your existing infrastructure.
+A **modern network monitoring platform** featuring AI-powered insights, real-time topology mapping, and optional integrations for enhanced functionality.
 
 ## ✨ Features
 
 ### 🤖 AI-Powered Intelligence
-- **Nexus MCP Integration**: Real AI analysis with graceful fallbacks
+- **External AI Integration**: Connect to your own AI server for advanced network analysis
 - **Smart Recommendations**: Context-aware network optimization suggestions
 - **Performance Scoring**: AI-driven network health assessment (0-100)
+- **Local Fallback**: Built-in analysis when external AI is unavailable
 - **Predictive Insights**: Quality, stability, and jitter analysis per device
 
 ### 📊 Network Topology & Visualization
-- **Interactive Network Map**: Visual representation of your homelab
+- **Interactive Network Map**: Visual representation of your network
 - **Device Classification**: Auto-categorizes as Router, Pi, IoT, or Server
 - **Real-time Connections**: Live status with color-coded connection lines
 - **Responsive Sparklines**: Beautiful latency trend charts
@@ -27,20 +28,22 @@ A **next-generation network monitoring platform** built for homelabs, featuring 
 - **Uptime Tracking**: Real-time device uptime counters
 - **Mobile Responsive**: Perfect for monitoring on-the-go
 
-### 🔗 Seamless Integrations (All Non-Disruptive)
-- **Discord Alerts**: Real-time notifications for device status changes
-- **CyphorLogs Integration**: Silent event logging to your logging system
+### 🔗 Optional Integrations (All Non-Disruptive)
+- **Webhook Alerts**: Real-time notifications for device status changes (Discord, Slack, etc.)
+- **Logging Integration**: Silent event logging to external logging systems
 - **Browser Notifications**: Desktop alerts for critical events
-- **Nexus MCP**: Advanced AI network analysis
+- **External AI Server**: Advanced network analysis via REST API
 
 ## 🚀 Quick Start
 
 ### Docker Deployment (Recommended)
 ```bash
-git clone https://github.com/RellG/network-monitor.git
-cd network-monitor
+git clone https://github.com/YOUR_USERNAME/LatencyMonitor.git
+cd LatencyMonitor
 docker-compose up -d
 ```
+
+Access the dashboard at: `http://localhost:8082`
 
 ### Manual Setup
 ```bash
@@ -49,32 +52,59 @@ python ping_monitor.py &
 python app.py
 ```
 
+Access the dashboard at: `http://localhost:5000`
+
 ## 📋 Configuration
 
+All configuration is **optional** and done via environment variables. Copy `.env.example` to `.env` and configure as needed:
+
 ### Environment Variables
-- `MCP_SERVER_URL`: Your Nexus Universal MCP Server (default: http://192.168.4.154:8080)
-- `CYPHORLOGS_URL`: CyphorLogs integration endpoint (optional)
-- `DISCORD_WEBHOOK_URL`: Discord webhook for alerts (optional)
+
+```bash
+# Default Devices (optional)
+# Format: "DeviceName1:IP1,DeviceName2:IP2"
+DEFAULT_DEVICES=Router:192.168.1.1,Server:192.168.1.100
+
+# AI Analysis Server (optional)
+# Your external AI server for advanced network analysis
+AI_SERVER_URL=http://your-ai-server:8080
+
+# Logging Server (optional)
+# External logging server for centralized event logging
+LOGGING_SERVER_URL=http://your-logging-server:3000
+
+# Webhook URL (optional)
+# Webhook for real-time alerts (Discord, Slack, etc.)
+WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_TOKEN
+
+# Platform URLs (optional)
+# Display connected platforms in the AI sidebar
+PLATFORM_MONITOR_URL=http://localhost:8082
+PLATFORM_LOGS_URL=http://your-logging-server:3000
+PLATFORM_AI_URL=http://your-ai-server:8080
+```
 
 ### Device Management
-- Add devices via the web interface
+- Add devices via the web interface (no configuration files needed)
 - Automatic categorization based on hostname and IP
 - Persistent device history and uptime tracking
+- Export/import device configurations
 
 ## 🎯 Key Components
 
 ### Core Files
 - `app.py`: Flask web server and API endpoints
 - `ping_monitor.py`: Background network monitoring service
-- `Templates/dashboard.html`: Enhanced AI-powered web interface
+- `Templates/dashboard.html`: AI-powered web interface
 - `docker-compose.yml`: Container orchestration
 - `requirements.txt`: Python dependencies
 
 ### Features
 - **Real-time Monitoring**: 2-second refresh intervals
 - **Historical Data**: 50-point latency history per device
-- **Smart Alerts**: Homelab-optimized thresholds (>200ms latency)
+- **Smart Alerts**: Configurable thresholds (default: >200ms latency)
 - **Data Persistence**: Docker volume for device configurations
+- **Graceful Degradation**: All integrations are optional and non-disruptive
 
 ## 🏗️ Architecture
 
@@ -86,122 +116,140 @@ python app.py
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Discord Alerts  │    │   Nexus MCP      │    │ Device History  │
-│ (Non-disruptive)│    │ (AI Analysis)    │    │ (JSON Storage)  │
+│ Webhook Alerts  │    │   AI Server      │    │ Device History  │
+│ (Optional)      │    │   (Optional)     │    │ (JSON Storage)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
 ## 🔧 Advanced Configuration
 
-### Nexus MCP Integration
-To enable real AI analysis, ensure your [Nexus Universal MCP Server](https://github.com/RellG/nexus-mcp) is running:
-```javascript
-// In dashboard.html, update:
-const MCP_SERVER_URL = 'http://your-mcp-server:8080';
+### External AI Server Integration
+To enable advanced AI analysis, configure an AI server that implements the following endpoint:
+
+**POST** `/api/tools/analyze_network`
+```json
+{
+  "name": "analyze_network",
+  "arguments": {
+    "devices": ["Device1", "Device2"],
+    "latency_data": {
+      "Device1": [10.5, 11.2, 10.8],
+      "Device2": [25.3, 26.1, 24.9]
+    }
+  }
+}
 ```
 
-### Discord Alerts Setup
-1. Create a Discord webhook in your server
-2. Update the webhook URL in `Templates/dashboard.html`:
-```javascript
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/...';
+**Response:**
+```json
+{
+  "success": true,
+  "network_score": 85,
+  "status": "good",
+  "recommendations": [
+    "Network performance is within normal parameters",
+    "Consider monitoring Device2 for latency spikes"
+  ]
+}
 ```
 
-### CyphorLogs Integration
-For centralized logging, point to your CyphorLogs server:
+### Webhook Alert Integration
+Configure a Discord webhook for real-time alerts:
+
+1. Create a webhook in your Discord server settings
+2. Add the webhook URL to your `.env` file:
+   ```bash
+   WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_TOKEN
+   ```
+3. Restart the container: `docker-compose restart`
+
+Slack and other webhook services are also supported (uses standard Discord webhook format).
+
+### Custom Thresholds
+Modify thresholds in `Templates/dashboard.html`:
 ```javascript
-const CYPHORLOGS_URL = 'http://your-logs-server:3000';
-```
-
-## 🎨 Customization
-
-### Device Categories
-The system automatically categorizes devices:
-- **🏠 Router**: Names containing 'router', 'gateway', or IPs ending in '.1'
-- **🥧 Raspberry Pi**: Names containing 'pi' or 'raspberry'
-- **🖥️ Server**: Names containing 'server', 'nas', or 'vm'
-- **📱 IoT**: All other devices
-
-### Theme Customization
-Modify CSS variables in `Templates/dashboard.html`:
-```css
-:root {
-  --accent: #3b82f6;          /* Primary accent color */
-  --mcp-accent: #8b5cf6;      /* AI accent color */
-  --ai-glow: #a855f7;         /* AI glow effect */
+// Line ~1654: High latency threshold
+if (device.latency > 200 && deviceHistory[name].length > 5) {
+    // Adjust 200ms threshold as needed
 }
 ```
 
 ## 📊 API Endpoints
 
-- `GET /`: Main dashboard interface
-- `GET /api/data`: Current device data and latency
-- `GET /api/devices`: List all configured devices
-- `POST /api/devices`: Add new device
-- `DELETE /api/devices`: Remove device
+- `GET /` - Web dashboard
+- `GET /api/data` - Current device status
+- `GET /api/devices` - List all monitored devices
+- `POST /api/devices` - Add new device
+- `DELETE /api/devices` - Remove device
+- `GET /api/history/<device_name>` - Device latency history
+- `GET /api/stats` - Network statistics summary
+- `GET /api/config` - Frontend configuration
 
-## 🛠️ Development
+## 🐳 Docker Configuration
 
-### Local Development
-```bash
-# Install dependencies
-pip install -r requirements.txt
+The platform uses Docker for easy deployment:
 
-# Run in development mode
-export FLASK_ENV=development
-python app.py
+```yaml
+version: '3'
+services:
+  monitor:
+    build: .
+    ports:
+      - "8082:80"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - AI_SERVER_URL=${AI_SERVER_URL}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+    restart: unless-stopped
 ```
 
-### Adding Features
-The modular architecture makes it easy to extend:
-1. Update `app.py` for new API endpoints
-2. Modify `Templates/dashboard.html` for UI changes
-3. Extend `ping_monitor.py` for monitoring enhancements
+## 🛠️ Troubleshooting
 
-## 🔒 Security
+### Container Issues
+```bash
+# Check container logs
+docker-compose logs -f monitor
 
-- **No hardcoded secrets**: All sensitive data via environment variables
-- **Non-disruptive integrations**: All external calls fail silently
-- **Containerized**: Runs in isolated Docker environment
-- **Read-only monitoring**: No network modifications, only observation
+# Rebuild containers
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
 
-## 🤝 Integration Ecosystem
+### Network Permissions
+The container requires `NET_RAW` and `NET_ADMIN` capabilities for ping operations. These are configured in `docker-compose.yml`.
 
-### Cyphor Homelab Stack
-- **LatencyMonitor**: Network monitoring (this project)
-- **CyphorLogs**: Centralized logging system
-- **Nexus MCP**: AI analysis and automation
-- **Discord**: Real-time alerting
+### Debug Mode
+Add `?debug=1` to the URL to enable console logging for integrations:
+```
+http://localhost:8082/?debug=1
+```
 
-## 📈 Performance
+## 🤝 Contributing
 
-- **Lightweight**: <50MB Docker image
-- **Fast**: 2-second refresh cycles
-- **Efficient**: Minimal resource usage
-- **Scalable**: Handles 50+ devices easily
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 🎯 Roadmap
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-- [ ] Historical trend analysis
-- [ ] Network topology auto-discovery  
-- [ ] Mobile PWA support
-- [ ] SNMP integration
-- [ ] Multi-site monitoring
+## 📝 License
 
-## 📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-MIT License - Feel free to use this in your homelab!
+## 🙏 Acknowledgments
 
-## 🙏 Credits
+- Built with Flask and modern web technologies
+- Designed for easy deployment and extensibility
+- Inspired by the need for simple, effective network monitoring
 
-- **AI Enhancement**: Powered by Claude Sonnet 4
-- **Icons**: FontAwesome
-- **Monitoring**: Python ICMP ping
-- **UI Framework**: Vanilla JavaScript + CSS Grid
-- **Container**: Docker + Flask
+## 📧 Support
+
+For issues, questions, or suggestions, please open an issue on GitHub.
 
 ---
 
-**🏠 Built with ❤️ for the homelab community**
-
-Access your enhanced monitoring platform at: **http://ping.rellcloud.online:8082**
+**Note**: All integrations (AI, webhooks, logging) are completely optional. The platform works perfectly as a standalone network monitor without any external services.

@@ -11,6 +11,14 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      # Optional configuration - set these in .env file
+      - DEFAULT_DEVICES=${DEFAULT_DEVICES:-}
+      - AI_SERVER_URL=${AI_SERVER_URL:-}
+      - LOGGING_SERVER_URL=${LOGGING_SERVER_URL:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - PLATFORM_MONITOR_URL=${PLATFORM_MONITOR_URL:-}
+      - PLATFORM_LOGS_URL=${PLATFORM_LOGS_URL:-}
+      - PLATFORM_AI_URL=${PLATFORM_AI_URL:-}
     user: "1000:1000"
     restart: unless-stopped
     cap_add:

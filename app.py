@@ -18,7 +18,17 @@ def load_devices():
         with open(DEVICES_FILE) as f:
             return json.load(f)
     except:
-        return {"PS5": "192.168.4.106", "Router": "192.168.4.1"}
+        # Load default devices from environment variable if configured
+        default_devices_str = os.getenv('DEFAULT_DEVICES', '')
+        if default_devices_str:
+            # Format: "DeviceName1:IP1,DeviceName2:IP2"
+            devices = {}
+            for device_pair in default_devices_str.split(','):
+                if ':' in device_pair:
+                    name, ip = device_pair.split(':', 1)
+                    devices[name.strip()] = ip.strip()
+            return devices
+        return {}
 
 def save_devices(devices):
     with file_lock:
@@ -122,16 +132,16 @@ def get_stats():
         with file_lock:
             with open(DATA_FILE) as f:
                 data = json.load(f)
-        
+
         total = len(data.get('devices', {}))
         online = sum(1 for d in data.get('devices', {}).values() if d.get('reachable', False))
         offline = total - online
-        
-        latencies = [d['latency'] for d in data.get('devices', {}).values() 
+
+        latencies = [d['latency'] for d in data.get('devices', {}).values()
                     if d.get('reachable', False) and d.get('latency')]
-        
+
         avg_latency = sum(latencies) / len(latencies) if latencies else 0
-        
+
         return jsonify({
             "total": total,
             "online": online,
@@ -141,6 +151,20 @@ def get_stats():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/config')
+def get_config():
+    """Return frontend configuration from environment variables (optional integrations)"""
+    return jsonify({
+        "ai_server_url": os.getenv('AI_SERVER_URL', ''),
+        "logging_server_url": os.getenv('LOGGING_SERVER_URL', ''),
+        "webhook_url": os.getenv('WEBHOOK_URL', ''),
+        "platform_urls": {
+            "monitor": os.getenv('PLATFORM_MONITOR_URL', ''),
+            "logs": os.getenv('PLATFORM_LOGS_URL', ''),
+            "ai": os.getenv('PLATFORM_AI_URL', '')
+        }
+    })
 
 if __name__ == '__main__':
     # Ensure data directory exists
