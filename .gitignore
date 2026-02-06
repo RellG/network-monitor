@@ -84,3 +84,19 @@ secrets.env
 tmp/
 temp/
 .tmp/
+
+# Local utility scripts and guides
+*.bak
+*.before_servers
+*.broken
+deploy.sh
+fix_*.py
+integrate_*.py
+CLAUDE.md
+
+# Local documentation (not for repo)
+*_GUIDE.md
+*_SUMMARY.md
+*_IMPROVEMENTS.md
+*_INTEGRATION.md
+SERVER_MANAGEMENT.html

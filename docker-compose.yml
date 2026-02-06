@@ -7,7 +7,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./Templates:/app/Templates
-      - ./static:/app/static
     environment:
       - PUID=1000
       - PGID=1000

@@ -15,7 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ping_monitor.py ./
 COPY Templates/ ./Templates/
-COPY static/ ./static/
 
 RUN groupadd -g 1000 monitor && \
     useradd -u 1000 -g monitor -d /app monitor && \
