@@ -4,6 +4,7 @@ import time
 import json
 import os
 import threading
+import concurrent.futures
 from datetime import datetime
 from collections import deque
 
@@ -16,6 +17,7 @@ MAX_HISTORY_POINTS = 100  # Keep last 100 data points per device
 PING_INTERVAL = 1  # seconds
 PING_TIMEOUT = 1  # seconds
 PING_COUNT = 1  # number of pings per check
+MAX_WORKERS = 10  # Maximum concurrent ping operations
 
 # Lock for thread-safe file operations
 file_lock = threading.Lock()
@@ -90,48 +92,67 @@ class PingMonitor:
         for name in devices_to_remove:
             del self.history[name]
     
+    def ping_device_wrapper(self, name, ip):
+        """Wrapper for parallel ping execution"""
+        ping_result = self.ping_device(ip)
+        return name, {**ping_result, "ip": ip}, ping_result
+
     def run(self):
-        """Main monitoring loop"""
-        print("Starting ping monitor...")
-        
+        """Main monitoring loop with parallel ping execution"""
+        print("Starting optimized ping monitor with parallel execution...")
+
         while True:
             try:
                 # Load current devices
                 devices = self.load_devices()
-                
+
+                if not devices:
+                    time.sleep(PING_INTERVAL)
+                    continue
+
                 # Clean up history for removed devices
                 self.clean_history(devices)
-                
+
                 # Ping results
                 results = {
                     "timestamp": datetime.now().isoformat(),
                     "devices": {}
                 }
-                
-                # Ping each device
-                for name, ip in devices.items():
-                    ping_result = self.ping_device(ip)
-                    results["devices"][name] = {
-                        **ping_result,
-                        "ip": ip
+
+                # Ping devices in parallel for better performance
+                with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                    # Submit all ping tasks
+                    future_to_device = {
+                        executor.submit(self.ping_device_wrapper, name, ip): name
+                        for name, ip in devices.items()
                     }
-                    
-                    # Update history if device is reachable
-                    if ping_result["reachable"]:
-                        self.update_history(name, ping_result["latency"])
-                
-                # Save current results
-                with file_lock:
-                    with open(LOG_FILE, 'w') as f:
-                        json.dump(results, f, indent=2)
-                
+
+                    # Collect results as they complete
+                    for future in concurrent.futures.as_completed(future_to_device):
+                        try:
+                            name, device_data, ping_result = future.result()
+                            results["devices"][name] = device_data
+
+                            # Update history if device is reachable
+                            if ping_result["reachable"]:
+                                self.update_history(name, ping_result["latency"])
+                        except Exception as e:
+                            device_name = future_to_device[future]
+                            print(f"Error pinging {device_name}: {e}")
+
+                # Save current results (only if we have data)
+                if results["devices"]:
+                    with file_lock:
+                        with open(LOG_FILE, 'w') as f:
+                            json.dump(results, f, indent=2)
+
                 # Save history periodically (every 10 iterations)
                 if int(time.time()) % 10 == 0:
                     self.save_history()
-                
+
             except Exception as e:
                 print(f"Error in monitoring loop: {e}")
-            
+
             # Wait before next check
             time.sleep(PING_INTERVAL)
 

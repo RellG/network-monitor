@@ -1,1841 +1,1183 @@
 <!DOCTYPE html>
-     <html lang="en">
-     <head>
-         <meta charset="UTF-8">
-         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-         <title>Network Latency Monitor - AI Enhanced</title>
-         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-         <style>
-             * {
-                 margin: 0;
-                 padding: 0;
-                 box-sizing: border-box;
-             }
-
-             :root {
-                 --bg-primary: #0f172a;
-                 --bg-secondary: #1e293b;
-                 --bg-card: #334155;
-                 --text-primary: #f1f5f9;
-                 --text-secondary: #cbd5e1;
-                 --accent: #3b82f6;
-                 --success: #10b981;
-                 --warning: #f59e0b;
-                 --danger: #ef4444;
-                 --border: #475569;
-                 --mcp-accent: #8b5cf6; /* New MCP AI color */
-                 --ai-glow: #a855f7;
-                 --opacity: 1; /* For quiet hours dimming */
-             }
-
-             /* Light theme variables */
-             :root.light-theme {
-                 --bg-primary: #f8fafc;
-                 --bg-secondary: #f1f5f9;
-                 --bg-card: #ffffff;
-                 --text-primary: #1e293b;
-                 --text-secondary: #64748b;
-                 --border: #e2e8f0;
-             }
-
-             /* Quiet hours dimming */
-             body.quiet-hours {
-                 --opacity: 0.7;
-                 filter: brightness(0.8);
-             }
-
-             body.quiet-hours .ai-badge {
-                 animation: none; /* Stop glowing during quiet hours */
-             }
-
-             body {
-                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                 background: var(--bg-primary);
-                 color: var(--text-primary);
-                 line-height: 1.6;
-             }
-
-             .container {
-                 max-width: 1600px; /* Wider for AI panel */
-                 margin: 0 auto;
-                 padding: 20px;
-             }
-
-             .header {
-                 display: flex;
-                 justify-content: space-between;
-                 align-items: center;
-                 margin-bottom: 30px;
-                 flex-wrap: wrap;
-                 gap: 20px;
-             }
-
-             h1 {
-                 font-size: 2rem;
-                 font-weight: 700;
-                 display: flex;
-                 align-items: center;
-                 gap: 10px;
-             }
-
-             .ai-badge {
-                 background: linear-gradient(135deg, var(--mcp-accent), var(--ai-glow));
-                 color: white;
-                 padding: 4px 12px;
-                 border-radius: 20px;
-                 font-size: 0.7rem;
-                 font-weight: 600;
-                 text-transform: uppercase;
-                 letter-spacing: 0.5px;
-                 animation: glow 2s ease-in-out infinite alternate;
-             }
-
-             @keyframes glow {
-                 from { box-shadow: 0 0 5px var(--mcp-accent); }
-                 to { box-shadow: 0 0 15px var(--ai-glow), 0 0 25px var(--mcp-accent); }
-             }
-
-             .status-bar {
-                 display: flex;
-                 align-items: center;
-                 gap: 20px;
-                 flex-wrap: wrap;
-             }
-
-             .last-update {
-                 color: var(--text-secondary);
-                 font-size: 0.9rem;
-             }
-
-             .toggle-btn {
-                 background: var(--bg-card);
-                 border: 1px solid var(--border);
-                 color: var(--text-primary);
-                 padding: 8px 16px;
-                 border-radius: 8px;
-                 cursor: pointer;
-                 transition: all 0.3s ease;
-                 display: flex;
-                 align-items: center;
-                 gap: 8px;
-             }
-
-             .toggle-btn:hover {
-                 background: var(--border);
-             }
-
-             .toggle-btn.active {
-                 background: var(--accent);
-                 border-color: var(--accent);
-             }
-
-             .toggle-btn.ai-mode {
-                 background: linear-gradient(135deg, var(--mcp-accent), var(--ai-glow));
-                 border-color: var(--mcp-accent);
-             }
-
-             .toggle-btn.ai-mode:hover {
-                 background: linear-gradient(135deg, var(--ai-glow), var(--mcp-accent));
-             }
-
-             /* Main Layout - Now with sidebar for AI */
-             .main-layout {
-                 display: grid;
-                 grid-template-columns: 1fr 400px; /* Main content + AI sidebar */
-                 gap: 30px;
-                 margin-bottom: 30px;
-             }
-
-             .main-content {
-                 min-width: 0; /* Prevents overflow */
-             }
-
-             .ai-sidebar {
-                 background: var(--bg-secondary);
-                 border: 1px solid var(--border);
-                 border-radius: 12px;
-                 padding: 20px;
-                 height: fit-content;
-                 position: sticky;
-                 top: 20px;
-             }
-
-             .ai-sidebar.hidden {
-                 display: none;
-             }
-
-             /* Responsive - Stack on mobile */
-             @media (max-width: 1200px) {
-                 .main-layout {
-                     grid-template-columns: 1fr;
-                 }
-
-                 .ai-sidebar {
-                     order: -1; /* Show AI insights first on mobile */
-                 }
-             }
-
-             .stats-grid {
-                 display: grid;
-                 grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                 gap: 20px;
-                 margin-bottom: 30px;
-             }
-
-             .stat-card {
-                 background: var(--bg-secondary);
-                 border: 1px solid var(--border);
-                 border-radius: 12px;
-                 padding: 20px;
-                 text-align: center;
-                 transition: all 0.3s ease;
-             }
-
-             .stat-card:hover {
-                 border-color: var(--accent);
-                 transform: translateY(-2px);
-             }
-
-             .stat-number {
-                 font-size: 2.5rem;
-                 font-weight: 700;
-                 margin-bottom: 5px;
-             }
-
-             .stat-label {
-                 color: var(--text-secondary);
-                 font-size: 0.9rem;
-                 font-weight: 500;
-             }
-
-             .stat-card.online .stat-number { color: var(--success); }
-             .stat-card.offline .stat-number { color: var(--danger); }
-             .stat-card.latency .stat-number { color: var(--accent); }
-
-             /* AI Insights Panel Styles */
-             .ai-panel-header {
-                 display: flex;
-                 align-items: center;
-                 gap: 10px;
-                 margin-bottom: 20px;
-                 padding-bottom: 15px;
-                 border-bottom: 2px solid var(--mcp-accent);
-             }
-
-             .ai-panel-header h3 {
-                 color: var(--mcp-accent);
-                 font-size: 1.2rem;
-             }
-
-             .ai-score-gauge {
-                 background: var(--bg-card);
-                 border-radius: 12px;
-                 padding: 20px;
-                 text-align: center;
-                 margin-bottom: 20px;
-                 position: relative;
-                 overflow: hidden;
-             }
-
-             .ai-score-gauge::before {
-                 content: '';
-                 position: absolute;
-                 top: 0;
-                 left: 0;
-                 right: 0;
-                 bottom: 0;
-                 background: linear-gradient(135deg, var(--mcp-accent)20, transparent);
-                 z-index: 0;
-             }
-
-             .ai-score-gauge > * {
-                 position: relative;
-                 z-index: 1;
-             }
-
-             .score-number {
-                 font-size: 3rem;
-                 font-weight: 800;
-                 background: linear-gradient(135deg, var(--mcp-accent), var(--ai-glow));
-                 -webkit-background-clip: text;
-                 -webkit-text-fill-color: transparent;
-                 background-clip: text;
-             }
-
-             .score-label {
-                 font-size: 0.9rem;
-                 color: var(--text-secondary);
-                 margin-bottom: 10px;
-             }
-
-             .score-status {
-                 padding: 6px 14px;
-                 border-radius: 20px;
-                 font-size: 0.8rem;
-                 font-weight: 600;
-                 text-transform: uppercase;
-             }
-
-             .score-status.excellent {
-                 background: var(--success);
-                 color: white;
-             }
-             .score-status.good {
-                 background: var(--accent);
-                 color: white;
-             }
-             .score-status.warning {
-                 background: var(--warning);
-                 color: var(--bg-primary);
-             }
-             .score-status.critical {
-                 background: var(--danger);
-                 color: white;
-             }
-
-             .ai-recommendations {
-                 background: var(--bg-card);
-                 border-radius: 12px;
-                 padding: 20px;
-                 margin-bottom: 20px;
-             }
-
-             .ai-recommendations h4 {
-                 color: var(--ai-glow);
-                 margin-bottom: 15px;
-                 display: flex;
-                 align-items: center;
-                 gap: 8px;
-             }
-
-             .recommendation-item {
-                 background: var(--bg-primary);
-                 border: 1px solid var(--border);
-                 border-radius: 8px;
-                 padding: 12px;
-                 margin-bottom: 10px;
-                 font-size: 0.9rem;
-                 line-height: 1.5;
-             }
-
-             .recommendation-item:last-child {
-                 margin-bottom: 0;
-             }
-
-             .platform-status {
-                 background: var(--bg-card);
-                 border-radius: 12px;
-                 padding: 20px;
-             }
-
-             .platform-status h4 {
-                 color: var(--success);
-                 margin-bottom: 15px;
-                 display: flex;
-                 align-items: center;
-                 gap: 8px;
-             }
-
-             .platform-item {
-                 display: flex;
-                 justify-content: space-between;
-                 align-items: center;
-                 padding: 8px 0;
-                 border-bottom: 1px solid var(--border);
-             }
-
-             .platform-item:last-child {
-                 border-bottom: none;
-             }
-
-             .platform-name {
-                 font-weight: 500;
-             }
-
-             .platform-url {
-                 color: var(--text-secondary);
-                 font-size: 0.8rem;
-             }
-
-             .platform-link {
-                 background: var(--accent);
-                 color: white;
-                 padding: 4px 8px;
-                 border-radius: 6px;
-                 text-decoration: none;
-                 font-size: 0.8rem;
-                 transition: background-color 0.3s ease;
-             }
-
-             .platform-link:hover {
-                 background: var(--mcp-accent);
-             }
-
-             /* Enhanced Device Cards */
-             .devices-grid {
-                 display: grid;
-                 grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-                 gap: 20px;
-             }
-
-             .device-card {
-                 background: var(--bg-secondary);
-                 border: 1px solid var(--border);
-                 border-radius: 12px;
-                 padding: 20px;
-                 transition: all 0.3s ease;
-                 position: relative;
-             }
-
-             .device-card:hover {
-                 border-color: var(--accent);
-                 transform: translateY(-2px);
-                 box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-             }
-
-             .device-card.ai-enhanced {
-                 border-color: var(--mcp-accent);
-                 background: linear-gradient(135deg, var(--bg-secondary), var(--bg-secondary)f0);
-             }
-
-             .device-header {
-                 display: flex;
-                 justify-content: space-between;
-                 align-items: flex-start;
-                 margin-bottom: 15px;
-             }
-
-             .device-name {
-                 font-weight: 600;
-                 font-size: 1.1rem;
-                 color: var(--text-primary);
-             }
-
-             .device-ip {
-                 color: var(--text-secondary);
-                 font-size: 0.9rem;
-                 margin-top: 2px;
-             }
-
-             .device-actions {
-                 display: flex;
-                 gap: 8px;
-             }
-
-             .action-btn {
-                 background: var(--bg-card);
-                 border: 1px solid var(--border);
-                 color: var(--text-secondary);
-                 padding: 6px 8px;
-                 border-radius: 6px;
-                 cursor: pointer;
-                 font-size: 0.8rem;
-                 transition: all 0.3s ease;
-             }
-
-             .action-btn:hover {
-                 background: var(--border);
-                 color: var(--text-primary);
-             }
-
-             .action-btn.delete {
-                 border-color: var(--danger);
-                 color: var(--danger);
-             }
-
-             .action-btn.delete:hover {
-                 background: var(--danger);
-                 color: white;
-             }
-
-             .status-indicator {
-                 display: flex;
-                 align-items: center;
-                 gap: 8px;
-                 margin-bottom: 15px;
-             }
-
-             .status-dot {
-                 width: 12px;
-                 height: 12px;
-                 border-radius: 50%;
-                 animation: pulse 2s infinite;
-             }
-
-             .status-dot.online {
-                 background: var(--success);
-             }
-
-             .status-dot.offline {
-                 background: var(--danger);
-                 animation: none;
-             }
-
-             @keyframes pulse {
-                 0% { opacity: 1; }
-                 50% { opacity: 0.5; }
-                 100% { opacity: 1; }
-             }
-
-             .latency-display {
-                 font-size: 2rem;
-                 font-weight: 700;
-                 color: var(--accent);
-                 margin-bottom: 15px;
-             }
-
-             .latency-chart {
-                 height: 100px;
-                 background: var(--bg-primary);
-                 border-radius: 8px;
-                 padding: 10px;
-                 overflow: hidden;
-             }
-
-             .latency-chart svg {
-                 width: 100%;
-                 height: 100%;
-             }
-
-             .sparkline {
-                 fill: none;
-                 stroke: var(--accent);
-                 stroke-width: 2;
-                 opacity: 0.8;
-             }
-
-             .ai-insights-mini {
-                 background: linear-gradient(135deg, var(--mcp-accent)20, transparent);
-                 border: 1px solid var(--mcp-accent);
-                 border-radius: 8px;
-                 padding: 12px;
-                 margin-top: 15px;
-             }
-
-             .ai-insights-mini h5 {
-                 color: var(--mcp-accent);
-                 font-size: 0.9rem;
-                 margin-bottom: 8px;
-                 display: flex;
-                 align-items: center;
-                 gap: 6px;
-             }
-
-             .ai-metric {
-                 display: flex;
-                 justify-content: space-between;
-                 font-size: 0.8rem;
-                 margin-bottom: 4px;
-             }
-
-             .ai-metric:last-child {
-                 margin-bottom: 0;
-             }
-
-             /* Add device form styles remain the same */
-             .add-device-section {
-                 background: var(--bg-secondary);
-                 border: 1px solid var(--border);
-                 border-radius: 12px;
-                 margin-bottom: 30px;
-                 overflow: hidden;
-                 max-height: 0;
-                 transition: all 0.3s ease;
-             }
-
-             .add-device-section.active {
-                 max-height: 300px;
-             }
-
-             .add-device-form {
-                 padding: 20px;
-             }
-
-             .form-group {
-                 margin-bottom: 20px;
-             }
-
-             .form-group label {
-                 display: block;
-                 margin-bottom: 5px;
-                 color: var(--text-secondary);
-                 font-weight: 500;
-             }
-
-             .form-group input {
-                 width: 100%;
-                 background: var(--bg-primary);
-                 border: 1px solid var(--border);
-                 color: var(--text-primary);
-                 padding: 12px;
-                 border-radius: 8px;
-                 font-size: 1rem;
-             }
-
-             .form-group input:focus {
-                 outline: none;
-                 border-color: var(--accent);
-                 box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-             }
-
-             .form-actions {
-                 display: flex;
-                 gap: 10px;
-             }
-
-             .btn {
-                 background: var(--accent);
-                 color: white;
-                 border: none;
-                 padding: 12px 20px;
-                 border-radius: 8px;
-                 cursor: pointer;
-                 font-weight: 500;
-                 transition: background-color 0.3s ease;
-             }
-
-             .btn:hover {
-                 background: var(--mcp-accent);
-             }
-
-             .btn-secondary {
-                 background: var(--bg-card);
-                 color: var(--text-primary);
-                 border: 1px solid var(--border);
-             }
-
-             .btn-secondary:hover {
-                 background: var(--border);
-             }
-
-             /* Notification styles remain the same */
-             .notification {
-                 position: fixed;
-                 top: 20px;
-                 right: 20px;
-                 background: var(--success);
-                 color: white;
-                 padding: 15px 20px;
-                 border-radius: 8px;
-                 transform: translateX(100%);
-                 transition: transform 0.3s ease;
-                 z-index: 1000;
-             }
-
-             .notification.show {
-                 transform: translateX(0);
-             }
-
-             .notification.error {
-                 background: var(--danger);
-             }
-
-             /* Loading states */
-             .loading {
-                 opacity: 0.6;
-                 pointer-events: none;
-             }
-
-             .ai-loading {
-                 display: inline-block;
-                 width: 16px;
-                 height: 16px;
-                 border: 2px solid var(--mcp-accent);
-                 border-radius: 50%;
-                 border-top-color: transparent;
-                 animation: spin 1s ease-in-out infinite;
-             }
-
-             @keyframes spin {
-                 to { transform: rotate(360deg); }
-             }
-
-             /* Network Topology Map Styles */
-             .topology-section {
-                 background: var(--bg-secondary);
-                 border: 1px solid var(--border);
-                 border-radius: 12px;
-                 margin-bottom: 30px;
-                 padding: 20px;
-             }
-
-             .topology-header {
-                 display: flex;
-                 justify-content: space-between;
-                 align-items: center;
-                 margin-bottom: 20px;
-             }
-
-             .topology-map {
-                 position: relative;
-                 height: 300px;
-                 background: var(--bg-primary);
-                 border-radius: 8px;
-                 overflow: hidden;
-                 border: 1px solid var(--border);
-             }
-
-             .topology-node {
-                 position: absolute;
-                 width: 60px;
-                 height: 60px;
-                 border-radius: 50%;
-                 display: flex;
-                 align-items: center;
-                 justify-content: center;
-                 font-size: 1.5rem;
-                 color: white;
-                 cursor: pointer;
-                 transition: all 0.3s ease;
-                 border: 2px solid transparent;
-             }
-
-             .topology-node:hover {
-                 transform: scale(1.1);
-                 border-color: var(--ai-glow);
-             }
-
-             .topology-node.router { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
-             .topology-node.pi { background: linear-gradient(135deg, #10b981, #059669); }
-             .topology-node.iot { background: linear-gradient(135deg, #f59e0b, #d97706); }
-             .topology-node.server { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-             .topology-node.offline { background: linear-gradient(135deg, #6b7280, #4b5563); }
-
-             .topology-connection {
-                 position: absolute;
-                 height: 2px;
-                 background: var(--border);
-                 z-index: 1;
-                 opacity: 0.6;
-             }
-
-             .topology-connection.active {
-                 background: var(--success);
-                 opacity: 1;
-             }
-
-             .device-label {
-                 position: absolute;
-                 top: 65px;
-                 left: 50%;
-                 transform: translateX(-50%);
-                 font-size: 0.7rem;
-                 color: var(--text-secondary);
-                 white-space: nowrap;
-                 pointer-events: none;
-             }
-
-             /* Device Category Styles */
-             .category-tabs {
-                 display: flex;
-                 gap: 10px;
-                 margin-bottom: 20px;
-                 flex-wrap: wrap;
-             }
-
-             .category-tab {
-                 background: var(--bg-card);
-                 border: 1px solid var(--border);
-                 color: var(--text-secondary);
-                 padding: 8px 16px;
-                 border-radius: 20px;
-                 cursor: pointer;
-                 font-size: 0.9rem;
-                 transition: all 0.3s ease;
-                 display: flex;
-                 align-items: center;
-                 gap: 6px;
-             }
-
-             .category-tab:hover {
-                 border-color: var(--accent);
-                 color: var(--text-primary);
-             }
-
-             .category-tab.active {
-                 background: var(--accent);
-                 color: white;
-                 border-color: var(--accent);
-             }
-
-             .device-category {
-                 display: none;
-             }
-
-             .device-category.active {
-                 display: block;
-             }
-
-             /* Uptime Counter Styles */
-             .uptime-counter {
-                 background: linear-gradient(135deg, var(--success)20, transparent);
-                 border: 1px solid var(--success);
-                 border-radius: 6px;
-                 padding: 4px 8px;
-                 margin-top: 8px;
-                 font-size: 0.8rem;
-                 color: var(--success);
-                 text-align: center;
-             }
-
-             .uptime-counter.offline {
-                 background: linear-gradient(135deg, var(--danger)20, transparent);
-                 border-color: var(--danger);
-                 color: var(--danger);
-             }
-
-             /* Theme Toggle Styles */
-             .theme-controls {
-                 display: flex;
-                 gap: 10px;
-                 align-items: center;
-             }
-
-             .theme-toggle {
-                 background: var(--bg-card);
-                 border: 1px solid var(--border);
-                 border-radius: 20px;
-                 padding: 4px;
-                 cursor: pointer;
-                 transition: all 0.3s ease;
-             }
-
-             .theme-toggle:hover {
-                 border-color: var(--accent);
-             }
-
-             .theme-option {
-                 padding: 4px 12px;
-                 border-radius: 16px;
-                 font-size: 0.8rem;
-                 transition: all 0.3s ease;
-                 color: var(--text-secondary);
-             }
-
-             .theme-option.active {
-                 background: var(--accent);
-                 color: white;
-             }
-         </style>
-     </head>
-     <body>
-         <div class="container">
-             <div class="header">
-                 <h1>
-                     <i class="fas fa-network-wired"></i>
-                     Network Latency Monitor
-                     <span class="ai-badge">AI Enhanced</span>
-                 </h1>
-                 <div class="status-bar">
-                     <div class="last-update">
-                         Last update: <span id="timestamp">-</span>
-                         <span id="quiet-hours-indicator" style="color: var(--warning); margin-left: 10px; display: none;">
-                             🌙 Quiet Hours
-                         </span>
-                     </div>
-                     <div class="theme-controls">
-                         <div class="theme-toggle" id="theme-toggle">
-                             <span class="theme-option active" id="dark-theme">🌙</span>
-                             <span class="theme-option" id="light-theme">☀️</span>
-                         </div>
-                         <button class="toggle-btn" id="topology-toggle-btn">
-                             <i class="fas fa-project-diagram"></i>
-                             Topology
-                         </button>
-                         <button class="toggle-btn ai-mode" id="ai-toggle-btn">
-                             <i class="fas fa-brain"></i>
-                             AI Insights
-                         </button>
-                         <button class="toggle-btn active" id="auto-refresh-btn">
-                             <i class="fas fa-sync-alt"></i>
-                             Auto Refresh
-                         </button>
-                     </div>
-                 </div>
-             </div>
-
-             <div class="main-layout">
-                 <div class="main-content">
-                     <!-- Network Topology Map -->
-                     <div class="topology-section" id="topology-section" style="display: none;">
-                         <div class="topology-header">
-                             <h3><i class="fas fa-project-diagram"></i> Network Topology</h3>
-                             <small class="text-secondary">Visual representation of your homelab network</small>
-                         </div>
-                         <div class="topology-map" id="topology-map">
-                             <!-- Topology nodes will be generated here -->
-                         </div>
-                     </div>
-
-                     <!-- Statistics Grid -->
-                     <div class="stats-grid">
-                         <div class="stat-card">
-                             <div class="stat-number" id="total-devices">0</div>
-                             <div class="stat-label">Total Devices</div>
-                         </div>
-                         <div class="stat-card online">
-                             <div class="stat-number" id="online-devices">0</div>
-                             <div class="stat-label">Online</div>
-                         </div>
-                         <div class="stat-card offline">
-                             <div class="stat-number" id="offline-devices">0</div>
-                             <div class="stat-label">Offline</div>
-                         </div>
-                         <div class="stat-card latency">
-                             <div class="stat-number" id="avg-latency">-</div>
-                             <div class="stat-label">Avg Latency (ms)</div>
-                         </div>
-                     </div>
-
-                     <!-- Device Category Tabs -->
-                     <div class="category-tabs" id="category-tabs">
-                         <div class="category-tab active" data-category="all">
-                             <i class="fas fa-th"></i> All Devices
-                         </div>
-                         <div class="category-tab" data-category="router">
-                             <i class="fas fa-wifi"></i> Routers
-                         </div>
-                         <div class="category-tab" data-category="pi">
-                             <i class="fab fa-raspberry-pi"></i> Raspberry Pi
-                         </div>
-                         <div class="category-tab" data-category="iot">
-                             <i class="fas fa-microchip"></i> IoT Devices
-                         </div>
-                         <div class="category-tab" data-category="server">
-                             <i class="fas fa-server"></i> Servers
-                         </div>
-                     </div>
-
-                     <!-- Add Device Section -->
-                     <button class="toggle-btn" onclick="toggleAddDevice()">
-                         <i class="fas fa-plus"></i>
-                         Add Device
-                     </button>
-
-                     <div class="add-device-section" id="add-device-section">
-                         <form class="add-device-form" id="device-form">
-                             <div class="form-group">
-                                 <label for="device-name">Device Name</label>
-                                 <input type="text" id="device-name" name="name" required>
-                             </div>
-                             <div class="form-group">
-                                 <label for="device-ip">IP Address</label>
-                                 <input type="text" id="device-ip" name="ip" required pattern="^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$">
-                             </div>
-                             <div class="form-actions">
-                                 <button type="submit" class="btn">Add Device</button>
-                                 <button type="button" class="btn btn-secondary" onclick="toggleAddDevice()">Cancel</button>
-                             </div>
-                         </form>
-                     </div>
-
-                     <!-- Devices Grid -->
-                     <div class="devices-grid" id="devices-container">
-                         <!-- Device cards will be populated here -->
-                     </div>
-                 </div>
-
-                 <!-- AI Sidebar -->
-                 <div class="ai-sidebar" id="ai-sidebar">
-                     <div class="ai-panel-header">
-                         <i class="fas fa-brain"></i>
-                         <h3>AI Network Intelligence</h3>
-                         <div class="ai-loading" id="ai-loading" style="display: none;"></div>
-                     </div>
-
-                     <!-- AI Network Score -->
-                     <div class="ai-score-gauge">
-                         <div class="score-label">Network Performance Score</div>
-                         <div class="score-number" id="ai-score">--</div>
-                         <div class="score-status" id="ai-status">Analyzing...</div>
-                     </div>
-
-                     <!-- AI Recommendations -->
-                     <div class="ai-recommendations">
-                         <h4>
-                             <i class="fas fa-lightbulb"></i>
-                             Smart Recommendations
-                         </h4>
-                         <div id="ai-recommendations-list">
-                             <div class="recommendation-item">
-                                 🔍 Analyzing network patterns...
-                             </div>
-                         </div>
-                     </div>
-
-                     <!-- Platform Status -->
-                     <div class="platform-status">
-                         <h4>
-                             <i class="fas fa-network-wired"></i>
-                             Connected Platforms
-                         </h4>
-                         <div id="platform-status-list">
-                             <div class="platform-item">
-                                 <div>
-                                     <div class="platform-name">Discovering platforms...</div>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                 </div>
-             </div>
-         </div>
-
-         <!-- Notification -->
-         <div class="notification" id="notification">
-             <span id="notification-text">Notification</span>
-         </div>
-
-         <script>
-             // Global variables
-             let autoRefresh = true;
-             let aiInsightsEnabled = true;
-             let deviceHistory = {};
-             let deviceStates = {}; // Track online/offline states for alerting
-             let deviceUptime = {}; // Track device uptime
-             let aiData = null;
-             let platformData = null;
-             let currentTheme = 'dark';
-             let topologyVisible = false;
-             let activeCategory = 'all';
-             const HISTORY_POINTS = 50;
-
-             // Optional Server Configuration (All integrations are optional and non-disruptive)
-             // These will be loaded from backend API endpoint which reads environment variables
-             let AI_SERVER_URL = '';
-             let LOGGING_SERVER_URL = '';
-             let WEBHOOK_URL = '';
-             let PLATFORM_URLS = {};
-
-             // DOM elements
-             const timestampEl = document.getElementById('timestamp');
-             const devicesContainer = document.getElementById('devices-container');
-             const totalDevicesEl = document.getElementById('total-devices');
-             const onlineDevicesEl = document.getElementById('online-devices');
-             const offlineDevicesEl = document.getElementById('offline-devices');
-             const avgLatencyEl = document.getElementById('avg-latency');
-             const autoRefreshBtn = document.getElementById('auto-refresh-btn');
-             const aiToggleBtn = document.getElementById('ai-toggle-btn');
-             const aiSidebar = document.getElementById('ai-sidebar');
-             const aiScoreEl = document.getElementById('ai-score');
-             const aiStatusEl = document.getElementById('ai-status');
-             const aiRecommendationsEl = document.getElementById('ai-recommendations-list');
-             const platformStatusEl = document.getElementById('platform-status-list');
-             const aiLoadingEl = document.getElementById('ai-loading');
-             const notification = document.getElementById('notification');
-             const notificationText = document.getElementById('notification-text');
-             
-             // New feature elements
-             const topologyToggleBtn = document.getElementById('topology-toggle-btn');
-             const topologySection = document.getElementById('topology-section');
-             const topologyMap = document.getElementById('topology-map');
-             const themeToggle = document.getElementById('theme-toggle');
-             const darkTheme = document.getElementById('dark-theme');
-             const lightTheme = document.getElementById('light-theme');
-             const quietHoursIndicator = document.getElementById('quiet-hours-indicator');
-             const categoryTabs = document.querySelectorAll('.category-tab');
-
-             // Toggle auto refresh
-             autoRefreshBtn.addEventListener('click', () => {
-                 autoRefresh = !autoRefresh;
-                 autoRefreshBtn.classList.toggle('active');
-                 showNotification(autoRefresh ? 'Auto refresh enabled' : 'Auto refresh disabled', 'success');
-             });
-
-             // Toggle AI insights
-             aiToggleBtn.addEventListener('click', () => {
-                 aiInsightsEnabled = !aiInsightsEnabled;
-                 aiToggleBtn.classList.toggle('active');
-                 aiSidebar.classList.toggle('hidden');
-                 showNotification(aiInsightsEnabled ? 'AI insights enabled' : 'AI insights disabled', 'success');
-             });
-
-             // Toggle Network Topology
-             topologyToggleBtn.addEventListener('click', () => {
-                 topologyVisible = !topologyVisible;
-                 topologyToggleBtn.classList.toggle('active');
-                 topologySection.style.display = topologyVisible ? 'block' : 'none';
-                 showNotification(topologyVisible ? 'Topology map enabled' : 'Topology map disabled', 'success');
-                 if (topologyVisible) {
-                     renderTopologyMap();
-                 }
-             });
-
-             // Theme Toggle
-             themeToggle.addEventListener('click', (e) => {
-                 if (e.target.id === 'light-theme') {
-                     currentTheme = 'light';
-                     document.documentElement.classList.add('light-theme');
-                     darkTheme.classList.remove('active');
-                     lightTheme.classList.add('active');
-                 } else if (e.target.id === 'dark-theme') {
-                     currentTheme = 'dark';
-                     document.documentElement.classList.remove('light-theme');
-                     lightTheme.classList.remove('active');
-                     darkTheme.classList.add('active');
-                 }
-                 showNotification(`Switched to ${currentTheme} theme`, 'success');
-             });
-
-             // Category Tabs
-             categoryTabs.forEach(tab => {
-                 tab.addEventListener('click', () => {
-                     categoryTabs.forEach(t => t.classList.remove('active'));
-                     tab.classList.add('active');
-                     activeCategory = tab.dataset.category;
-                     filterDevicesByCategory();
-                 });
-             });
-
-             // Show notification
-             function showNotification(message, type = 'success') {
-                 notificationText.textContent = message;
-                 notification.className = `notification ${type} show`;
-                 setTimeout(() => {
-                     notification.classList.remove('show');
-                 }, 3000);
-             }
-
-             // Logging Integration - Send network events to external logging system (NON-DISRUPTIVE)
-             async function logNetworkEvent(event_type, data) {
-                 if (!LOGGING_SERVER_URL) return; // Skip if not configured
-
-                 try {
-                     const controller = new AbortController();
-                     setTimeout(() => controller.abort(), 1000); // 1 second timeout
-
-                     await fetch(`${LOGGING_SERVER_URL}/api/events`, {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({
-                             source: 'LatencyMonitor',
-                             event_type: event_type,
-                             timestamp: new Date().toISOString(),
-                             data: data
-                         }),
-                         signal: controller.signal
-                     });
-                 } catch (error) {
-                     // COMPLETELY SILENT - never disrupts main functionality
-                     // Only log to console in debug mode
-                     if (window.location.search.includes('debug=1')) {
-                         console.debug('Logging server unavailable:', error);
-                     }
-                 }
-             }
-
-             // Webhook Integration - Send alerts to webhook (NON-DISRUPTIVE)
-             async function sendWebhookAlert(title, message, color = 3447003) {
-                 if (!WEBHOOK_URL) return; // Skip if not configured
-
-                 try {
-                     const controller = new AbortController();
-                     setTimeout(() => controller.abort(), 2000); // 2 second timeout
-
-                     await fetch(WEBHOOK_URL, {
-                         method: 'POST',
-                         headers: { 'Content-Type': 'application/json' },
-                         body: JSON.stringify({
-                             embeds: [{
-                                 title: `🌐 Network Alert: ${title}`,
-                                 description: message,
-                                 color: color,
-                                 timestamp: new Date().toISOString(),
-                                 footer: { text: 'LatencyMonitor AI' }
-                             }]
-                         }),
-                         signal: controller.signal
-                     });
-                 } catch (error) {
-                     // COMPLETELY SILENT - never disrupts main functionality
-                     if (window.location.search.includes('debug=1')) {
-                         console.debug('Discord unavailable:', error);
-                     }
-                 }
-             }
-
-             // Browser notification for network alerts
-             function showBrowserNotification(title, message) {
-                 if ('Notification' in window && Notification.permission === 'granted') {
-                     new Notification(title, {
-                         body: message,
-                         icon: '/static/icon.png' // Add an icon if available
-                     });
-                 }
-             }
-
-             // Request notification permission on page load
-             if ('Notification' in window && Notification.permission === 'default') {
-                 Notification.requestPermission();
-             }
-
-             // Quiet Hours Detection (11PM - 7AM)
-             function checkQuietHours() {
-                 const now = new Date();
-                 const hour = now.getHours();
-                 const isQuietHours = hour >= 23 || hour < 7;
-                 
-                 if (isQuietHours) {
-                     document.body.classList.add('quiet-hours');
-                     quietHoursIndicator.style.display = 'inline';
-                 } else {
-                     document.body.classList.remove('quiet-hours');
-                     quietHoursIndicator.style.display = 'none';
-                 }
-                 
-                 return isQuietHours;
-             }
-
-             // Device Category Classification
-             function categorizeDevice(name, ip) {
-                 const deviceName = name.toLowerCase();
-                 const deviceIP = ip.toLowerCase();
-                 
-                 if (deviceName.includes('router') || deviceName.includes('gateway') || ip.endsWith('.1')) {
-                     return 'router';
-                 } else if (deviceName.includes('pi') || deviceName.includes('raspberry')) {
-                     return 'pi';
-                 } else if (deviceName.includes('server') || deviceName.includes('nas') || deviceName.includes('vm')) {
-                     return 'server';
-                 } else {
-                     return 'iot'; // Default for other devices
-                 }
-             }
-
-             // Filter Devices by Category
-             function filterDevicesByCategory() {
-                 const deviceCards = document.querySelectorAll('.device-card');
-                 deviceCards.forEach(card => {
-                     if (activeCategory === 'all') {
-                         card.style.display = 'block';
-                     } else {
-                         const category = card.dataset.category;
-                         card.style.display = category === activeCategory ? 'block' : 'none';
-                     }
-                 });
-             }
-
-             // Calculate Device Uptime
-             function calculateUptime(deviceName, isOnline) {
-                 if (!deviceUptime[deviceName]) {
-                     deviceUptime[deviceName] = {
-                         lastOnline: isOnline ? Date.now() : null,
-                         totalUptime: 0,
-                         lastCheck: Date.now()
-                     };
-                     return 'Just added';
-                 }
-
-                 const device = deviceUptime[deviceName];
-                 const now = Date.now();
-                 const timeDiff = now - device.lastCheck;
-
-                 if (isOnline) {
-                     if (device.lastOnline) {
-                         device.totalUptime += timeDiff;
-                     } else {
-                         device.lastOnline = now;
-                     }
-                 } else {
-                     device.lastOnline = null;
-                 }
-
-                 device.lastCheck = now;
-
-                 if (!isOnline) {
-                     return 'Offline';
-                 }
-
-                 const uptimeMs = device.totalUptime;
-                 const days = Math.floor(uptimeMs / (1000 * 60 * 60 * 24));
-                 const hours = Math.floor((uptimeMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                 const minutes = Math.floor((uptimeMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                 if (days > 0) {
-                     return `${days}d ${hours}h`;
-                 } else if (hours > 0) {
-                     return `${hours}h ${minutes}m`;
-                 } else {
-                     return `${minutes}m`;
-                 }
-             }
-
-             // Render Network Topology Map
-             function renderTopologyMap() {
-                 if (!topologyVisible) return;
-                 
-                 topologyMap.innerHTML = '';
-                 
-                 // Get router (gateway) position - center
-                 const centerX = topologyMap.offsetWidth / 2;
-                 const centerY = topologyMap.offsetHeight / 2;
-                 
-                 const devices = Object.entries(deviceStates);
-                 const routerDevices = devices.filter(([name, state]) => categorizeDevice(name, '') === 'router');
-                 const otherDevices = devices.filter(([name, state]) => categorizeDevice(name, '') !== 'router');
-                 
-                 // Add router in center
-                 if (routerDevices.length > 0) {
-                     const [routerName, routerState] = routerDevices[0];
-                     addTopologyNode(routerName, centerX - 30, centerY - 30, 'router', routerState);
-                 }
-                 
-                 // Add other devices in a circle around the router
-                 otherDevices.forEach(([name, state], index) => {
-                     const angle = (2 * Math.PI * index) / otherDevices.length;
-                     const radius = 100;
-                     const x = centerX + Math.cos(angle) * radius - 30;
-                     const y = centerY + Math.sin(angle) * radius - 30;
-                     const category = categorizeDevice(name, '');
-                     
-                     addTopologyNode(name, x, y, category, state);
-                     
-                     // Add connection line to router
-                     if (routerDevices.length > 0) {
-                         addTopologyConnection(centerX, centerY, x + 30, y + 30, state);
-                     }
-                 });
-             }
-             
-             function addTopologyNode(name, x, y, category, isOnline) {
-                 const node = document.createElement('div');
-                 node.className = `topology-node ${category} ${!isOnline ? 'offline' : ''}`;
-                 node.style.left = x + 'px';
-                 node.style.top = y + 'px';
-                 node.title = `${name} (${category})`;
-                 
-                 const icons = {
-                     router: '🏠',
-                     pi: '🥧',
-                     iot: '📱',
-                     server: '🖥️'
-                 };
-                 
-                 node.innerHTML = icons[category] || '📱';
-                 
-                 const label = document.createElement('div');
-                 label.className = 'device-label';
-                 label.textContent = name;
-                 node.appendChild(label);
-                 
-                 topologyMap.appendChild(node);
-             }
-             
-             function addTopologyConnection(x1, y1, x2, y2, isActive) {
-                 const connection = document.createElement('div');
-                 connection.className = `topology-connection ${isActive ? 'active' : ''}`;
-                 
-                 const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-                 const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
-                 
-                 connection.style.width = length + 'px';
-                 connection.style.left = x1 + 'px';
-                 connection.style.top = y1 + 'px';
-                 connection.style.transform = `rotate(${angle}deg)`;
-                 connection.style.transformOrigin = '0 50%';
-                 
-                 topologyMap.appendChild(connection);
-             }
-
-             // Toggle add device form
-             function toggleAddDevice() {
-                 const section = document.getElementById('add-device-section');
-                 section.classList.toggle('active');
-                 if (section.classList.contains('active')) {
-                     document.querySelector('.add-device-form input[name="name"]').focus();
-                 }
-             }
-
-             // Create sparkline chart (enhanced version)
-             function createSparkline(data, deviceName) {
-                 if (!data || data.length === 0) return '';
-
-                 const width = 350;
-                 const height = 100;
-                 const padding = 10;
-
-                 const max = Math.max(...data, 100);
-                 const min = 0;
-
-                 const xScale = (i) => (i / (data.length - 1)) * (width - 2 * padding) + padding;
-                 const yScale = (v) => height - ((v - min) / (max - min)) * (height - 2 * padding) - padding;
-
-                 const points = data.map((v, i) => `${xScale(i)},${yScale(v)}`).join(' ');
-
-                 // Enhanced sparkline with gradient and better styling
-                 const avgLatency = data.reduce((a, b) => a + b, 0) / data.length;
-                 const strokeColor = avgLatency < 50 ? '#10b981' : avgLatency < 100 ? '#3b82f6' : '#f59e0b';
-
-                 return `
-                     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-                         <defs>
-                             <linearGradient id="gradient-${deviceName}" x1="0%" y1="0%" x2="0%" y2="100%">
-                                 <stop offset="0%" style="stop-color:${strokeColor};stop-opacity:0.3" />
-                                 <stop offset="100%" style="stop-color:${strokeColor};stop-opacity:0" />
-                             </linearGradient>
-                         </defs>
-                         <polyline class="sparkline" points="${points}" style="stroke: ${strokeColor};" />
-                         <polygon points="${points} ${width-padding},${height-padding} ${padding},${height-padding}"
-                                  fill="url(#gradient-${deviceName})" />
-                     </svg>
-                 `;
-             }
-
-             // Create AI insights for device
-             function createDeviceAIInsights(device, deviceName) {
-                 if (!aiData || !aiInsightsEnabled) return '';
-
-                 const history = deviceHistory[deviceName] || [];
-                 if (history.length < 5) return ''; // Need some history for AI insights
-
-                 const avgLatency = history.reduce((a, b) => a + b, 0) / history.length;
-                 const maxLatency = Math.max(...history);
-                 const minLatency = Math.min(...history);
-                 const variance = history.reduce((acc, val) => acc + Math.pow(val - avgLatency, 2), 0) / history.length;
-                 const jitter = Math.sqrt(variance);
-
-                 const quality = avgLatency < 20 ? 'Excellent' : avgLatency < 50 ? 'Good' : avgLatency < 100 ? 'Fair' : 'Poor';
-                 const stability = jitter < 5 ? 'Very Stable' : jitter < 15 ? 'Stable' : jitter < 30 ? 'Moderate' : 'Unstable';
-
-                 return `
-                     <div class="ai-insights-mini">
-                         <h5><i class="fas fa-brain"></i> AI Analysis</h5>
-                         <div class="ai-metric">
-                             <span>Quality:</span>
-                             <span style="color: ${avgLatency < 50 ? 'var(--success)' : avgLatency < 100 ? 'var(--accent)' : 'var(--warning)'}">${quality}</span>
-                         </div>
-                         <div class="ai-metric">
-                             <span>Stability:</span>
-                             <span style="color: ${jitter < 15 ? 'var(--success)' : jitter < 30 ? 'var(--accent)' : 'var(--warning)'}">${stability}</span>
-                         </div>
-                         <div class="ai-metric">
-                             <span>Jitter:</span>
-                             <span>${jitter.toFixed(1)}ms</span>
-                         </div>
-                         <div class="ai-metric">
-                             <span>Range:</span>
-                             <span>${minLatency.toFixed(1)} - ${maxLatency.toFixed(1)}ms</span>
-                         </div>
-                     </div>
-                 `;
-             }
-
-             // Fetch AI insights
-             async function fetchAIInsights() {
-                 if (!aiInsightsEnabled) return;
-
-                 aiLoadingEl.style.display = 'inline-block';
-
-                 try {
-                     const aiResponse = await performAIAnalysis();
-                     aiData = aiResponse;
-                     updateAIInterface();
-
-                 } catch (error) {
-                     console.error('Failed to fetch AI insights:', error);
-                     showNotification('AI analysis temporarily unavailable', 'error');
-                 } finally {
-                     aiLoadingEl.style.display = 'none';
-                 }
-             }
-
-             // AI Analysis with Optional External Server Integration
-             async function performAIAnalysis() {
-                 try {
-                     // Try external AI server if configured
-                     if (AI_SERVER_URL) {
-                         const aiResponse = await fetch(`${AI_SERVER_URL}/api/tools/analyze_network`, {
-                             method: 'POST',
-                             headers: { 'Content-Type': 'application/json' },
-                             body: JSON.stringify({
-                                 name: 'analyze_network',
-                                 arguments: {
-                                     devices: Object.keys(deviceHistory),
-                                     latency_data: deviceHistory
-                                 }
-                             }),
-                             signal: AbortSignal.timeout(5000)
-                         });
-
-                         if (aiResponse.ok) {
-                             const aiData = await aiResponse.json();
-                             if (aiData.success) {
-                                 // Log successful AI analysis
-                                 logNetworkEvent('ai_analysis', {
-                                     score: aiData.network_score,
-                                     status: aiData.status,
-                                     recommendations: aiData.recommendations?.length || 0
-                                 });
-                                 return aiData;
-                             }
-                         }
-                     }
-                 } catch (error) {
-                     console.log('External AI server unavailable, using local analysis:', error);
-                     // Log AI server unavailability (non-disruptive)
-                     logNetworkEvent('ai_fallback', { reason: error.message.substring(0, 100) });
-                 }
-
-                 // Local AI analysis (fallback)
-                 await new Promise(resolve => setTimeout(resolve, 500));
-
-                 // Calculate network score based on current devices
-                 let totalLatency = 0;
-                 let deviceCount = 0;
-                 let onlineCount = 0;
-
-                 for (const [name, history] of Object.entries(deviceHistory)) {
-                     if (history.length > 0) {
-                         const avg = history.reduce((a, b) => a + b, 0) / history.length;
-                         totalLatency += avg;
-                         deviceCount++;
-                         onlineCount++;
-                     }
-                 }
-
-                 const avgNetworkLatency = deviceCount > 0 ? totalLatency / deviceCount : 0;
-                 let networkScore = 100;
-                 let status = 'excellent';
-                 const recommendations = [];
-
-                 if (avgNetworkLatency > 100) {
-                     networkScore -= 30;
-                     status = 'warning';
-                     recommendations.push('High latency detected - consider network optimization');
-                 } else if (avgNetworkLatency > 50) {
-                     networkScore -= 15;
-                     status = 'good';
-                     recommendations.push('Moderate latency - monitor for improvements');
-                 }
-
-                 if (onlineCount < 3) {
-                     networkScore -= 10;
-                     recommendations.push('Limited device visibility - consider adding more monitors');
-                 }
-
-                 if (recommendations.length === 0) {
-                     recommendations.push('Network performance is optimal');
-                     recommendations.push('All monitored devices showing good connectivity');
-                 }
-
-                 // Build platform list from configured URLs
-                 const platforms = {};
-                 if (PLATFORM_URLS.monitor) platforms['Network Monitor'] = { url: PLATFORM_URLS.monitor, status: 'online' };
-                 if (PLATFORM_URLS.logs) platforms['Logging Server'] = { url: PLATFORM_URLS.logs, status: 'online' };
-                 if (PLATFORM_URLS.ai) platforms['AI Server'] = { url: PLATFORM_URLS.ai, status: 'online' };
-
-                 return {
-                     ai_insights: {
-                         network_score: Math.max(networkScore, 0),
-                         status: status,
-                         overall_avg_latency: avgNetworkLatency.toFixed(1),
-                         performance_rating: avgNetworkLatency < 20 ? 'Excellent' :
-                                           avgNetworkLatency < 50 ? 'Good' :
-                                           avgNetworkLatency < 100 ? 'Fair' : 'Poor'
-                     },
-                     recommendations: recommendations,
-                     platform_discovery: platforms
-                 };
-             }
-
-             // Update AI interface
-             function updateAIInterface() {
-                 if (!aiData || !aiInsightsEnabled) return;
-
-                 const insights = aiData.ai_insights;
-
-                 // Update AI score
-                 aiScoreEl.textContent = insights.network_score;
-                 aiStatusEl.textContent = insights.status.toUpperCase();
-                 aiStatusEl.className = `score-status ${insights.status}`;
-
-                 // Update recommendations
-                 aiRecommendationsEl.innerHTML = '';
-                 aiData.recommendations.forEach(rec => {
-                     const item = document.createElement('div');
-                     item.className = 'recommendation-item';
-                     item.innerHTML = `<i class="fas fa-lightbulb" style="color: var(--ai-glow); margin-right: 8px;"></i> ${rec}`;
-                     aiRecommendationsEl.appendChild(item);
-                 });
-
-                 // Update platform status
-                 platformStatusEl.innerHTML = '';
-                 for (const [name, platform] of Object.entries(aiData.platform_discovery)) {
-                     const item = document.createElement('div');
-                     item.className = 'platform-item';
-                     item.innerHTML = `
-                         <div>
-                             <div class="platform-name">${name}</div>
-                             <div class="platform-url">${platform.url}</div>
-                         </div>
-                         <a href="${platform.url}" target="_blank" class="platform-link">
-                             <i class="fas fa-external-link-alt"></i>
-                         </a>
-                     `;
-                     platformStatusEl.appendChild(item);
-                 }
-             }
-
-             // Delete device
-             async function deleteDevice(name) {
-                 if (!confirm(`Are you sure you want to delete ${name}?`)) return;
-
-                 try {
-                     const response = await fetch('/api/devices', {
-                         method: 'DELETE',
-                         headers: {
-                             'Content-Type': 'application/json'
-                         },
-                         body: JSON.stringify({ name })
-                     });
-
-                     if (response.ok) {
-                         showNotification(`${name} deleted successfully`);
-                         delete deviceHistory[name];
-                         updateData();
-                     } else {
-                         showNotification('Failed to delete device', 'error');
-                     }
-                 } catch (error) {
-                     console.error('Error:', error);
-                     showNotification('Network error', 'error');
-                 }
-             }
-
-             // Update dashboard data (enhanced version)
-             async function updateData() {
-                 try {
-                     const response = await fetch('/api/data');
-                     const data = await response.json();
-
-                     if (data.error) {
-                         console.error(data.error);
-                         return;
-                     }
-
-                     // Update timestamp
-                     timestampEl.textContent = new Date(data.timestamp).toLocaleTimeString();
-
-                     // Update device history and track state changes for homelab alerts
-                     for (const [name, device] of Object.entries(data.devices)) {
-                         if (!deviceHistory[name]) {
-                             deviceHistory[name] = [];
-                         }
-                         
-                         // Track device state changes for Discord alerts
-                         const previousState = deviceStates[name];
-                         deviceStates[name] = device.reachable;
-                         
-                         // Send Discord alert on state change (non-disruptive)
-                         if (previousState !== undefined && previousState !== device.reachable) {
-                             if (device.reachable) {
-                                 sendWebhookAlert(
-                                     `Device Online: ${name}`, 
-                                     `📱 ${name} (${device.ip}) is back online with ${device.latency.toFixed(1)}ms latency`,
-                                     65280 // Green color
-                                 );
-                                 logNetworkEvent('device_online', { name, ip: device.ip, latency: device.latency });
-                             } else {
-                                 sendWebhookAlert(
-                                     `Device Offline: ${name}`, 
-                                     `🔴 ${name} (${device.ip}) has gone offline`,
-                                     16711680 // Red color
-                                 );
-                                 logNetworkEvent('device_offline', { name, ip: device.ip });
-                             }
-                         }
-                         
-                         if (device.reachable) {
-                             deviceHistory[name].push(device.latency);
-                             if (deviceHistory[name].length > HISTORY_POINTS) {
-                                 deviceHistory[name].shift();
-                             }
-                             
-                             // Alert on high latency (homelab-friendly threshold)
-                             if (device.latency > 200 && deviceHistory[name].length > 5) {
-                                 const avg = deviceHistory[name].reduce((a, b) => a + b, 0) / deviceHistory[name].length;
-                                 if (avg > 150) {
-                                     sendWebhookAlert(
-                                         `High Latency: ${name}`,
-                                         `⚠️ ${name} showing consistently high latency: ${device.latency.toFixed(1)}ms (avg: ${avg.toFixed(1)}ms)`,
-                                         16776960 // Orange color
-                                     );
-                                 }
-                             }
-                         }
-                     }
-
-                     // Calculate stats
-                     let totalDevices = 0;
-                     let onlineDevices = 0;
-                     let offlineDevices = 0;
-                     let totalLatency = 0;
-                     let latencyCount = 0;
-
-                     // Clear container
-                     devicesContainer.innerHTML = '';
-
-                     // Create device cards (enhanced with AI)
-                     for (const [name, device] of Object.entries(data.devices)) {
-                         totalDevices++;
-                         if (device.reachable) {
-                             onlineDevices++;
-                             totalLatency += device.latency;
-                             latencyCount++;
-                         } else {
-                             offlineDevices++;
-                         }
-
-                         // Categorize device and calculate uptime
-                         const category = categorizeDevice(name, device.ip);
-                         const uptime = calculateUptime(name, device.reachable);
-                         
-                         const card = document.createElement('div');
-                         card.className = `device-card ${aiInsightsEnabled ? 'ai-enhanced' : ''}`;
-                         card.dataset.category = category;
-                         
-                         const categoryIcons = {
-                             router: '🏠',
-                             pi: '🥧',
-                             iot: '📱',
-                             server: '🖥️'
-                         };
-                         
-                         card.innerHTML = `
-                             <div class="device-header">
-                                 <div>
-                                     <div class="device-name">
-                                         ${categoryIcons[category]} ${name}
-                                         <span style="font-size: 0.7rem; color: var(--text-secondary); margin-left: 8px;">(${category})</span>
-                                     </div>
-                                     <div class="device-ip">${device.ip}</div>
-                                 </div>
-                                 <div class="device-actions">
-                                     <button class="action-btn delete" onclick="deleteDevice('${name}')">
-                                         <i class="fas fa-trash"></i>
-                                     </button>
-                                 </div>
-                             </div>
-                             <div class="status-indicator">
-                                 <div class="status-dot ${device.reachable ? 'online' : 'offline'}"></div>
-                                 <span>${device.reachable ? 'Online' : 'Offline'}</span>
-                             </div>
-                             <div class="uptime-counter ${!device.reachable ? 'offline' : ''}">
-                                 <i class="fas fa-clock"></i> Uptime: ${uptime}
-                             </div>
-                             ${device.reachable ? `
-                                 <div class="latency-display">${device.latency.toFixed(1)} ms</div>
-                                 <div class="latency-chart">
-                                     ${createSparkline(deviceHistory[name] || [], name)}
-                                 </div>
-                                 ${createDeviceAIInsights(device, name)}
-                             ` : '<div class="latency-display">-</div>'}
-                         `;
-                         devicesContainer.appendChild(card);
-                     }
-
-                     // Update stats
-                     totalDevicesEl.textContent = totalDevices;
-                     onlineDevicesEl.textContent = onlineDevices;
-                     offlineDevicesEl.textContent = offlineDevices;
-                     avgLatencyEl.textContent = latencyCount > 0 ? (totalLatency / latencyCount).toFixed(1) : '-';
-
-                     // Apply category filtering and update topology
-                     filterDevicesByCategory();
-                     if (topologyVisible) {
-                         renderTopologyMap();
-                     }
-                     
-                     // Check quiet hours
-                     checkQuietHours();
-
-                     // Update AI insights periodically
-                     if (aiInsightsEnabled && Math.random() < 0.3) { // 30% chance to update AI on each refresh
-                         fetchAIInsights();
-                     }
-
-                 } catch (error) {
-                     console.error('Failed to fetch data:', error);
-                     showNotification('Failed to fetch data', 'error');
-                 }
-             }
-
-             // Handle device form submission
-             document.getElementById('device-form').addEventListener('submit', async (e) => {
-                 e.preventDefault();
-                 const formData = new FormData(e.target);
-
-                 try {
-                     const response = await fetch('/api/devices', {
-                         method: 'POST',
-                         headers: {
-                             'Content-Type': 'application/json'
-                         },
-                         body: JSON.stringify({
-                             name: formData.get('name'),
-                             ip: formData.get('ip')
-                         })
-                     });
-
-                     if (response.ok) {
-                         showNotification('Device added successfully!');
-                         e.target.reset();
-                         toggleAddDevice();
-                         updateData();
-                     } else {
-                         showNotification('Failed to add device', 'error');
-                     }
-                 } catch (error) {
-                     console.error('Error:', error);
-                     showNotification('Network error', 'error');
-                 }
-             });
-
-             // Auto-refresh with AI insights
-             setInterval(() => {
-                 if (autoRefresh) updateData();
-             }, 2000);
-
-             // Load configuration from backend API
-             async function loadConfig() {
-                 try {
-                     const response = await fetch('/api/config');
-                     if (response.ok) {
-                         const config = await response.json();
-                         AI_SERVER_URL = config.ai_server_url || '';
-                         LOGGING_SERVER_URL = config.logging_server_url || '';
-                         WEBHOOK_URL = config.webhook_url || '';
-                         PLATFORM_URLS = config.platform_urls || {};
-                     }
-                 } catch (error) {
-                     console.log('Config loading failed, using defaults:', error);
-                 }
-             }
-
-             // Initial AI insights fetch
-             setTimeout(() => {
-                 fetchAIInsights();
-             }, 3000); // Delay initial AI fetch to let devices load first
-
-             // Send startup notification via webhook (non-disruptive)
-             sendWebhookAlert(
-                 'LatencyMonitor Started',
-                 '🚀 Network LatencyMonitor with AI enhancements is now online!\n\n✨ Features:\n📊 Network Topology Map\n⏰ Quiet Hours Mode\n🌙 Dark/Light Theme Toggle\n📍 Device Categories\n🎮 Device Uptime Tracking',
-                 3447003 // Blue color
-             );
-
-             // Initial setup
-             async function initialize() {
-                 await loadConfig();
-                 checkQuietHours();
-                 updateData();
-             }
-
-             // Check quiet hours every minute
-             setInterval(checkQuietHours, 60000);
-
-             // Start the application
-             initialize();
-         </script>
-     </body>
-     </html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RellCloud NetOps — Network Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-base: #0a0f1a;
+            --bg-surface: #111827;
+            --bg-elevated: #1a2236;
+            --bg-hover: #1f2a3f;
+            --bg-input: #0d1322;
+            --border: #1e2d44;
+            --border-subtle: #162032;
+            --text-primary: #e8ecf4;
+            --text-secondary: #8896b0;
+            --text-tertiary: #5a6882;
+            --accent: #22d3ee;
+            --accent-dim: rgba(34,211,238,0.12);
+            --green: #10b981;
+            --green-dim: rgba(16,185,129,0.12);
+            --amber: #f59e0b;
+            --amber-dim: rgba(245,158,11,0.12);
+            --red: #ef4444;
+            --red-dim: rgba(239,68,68,0.12);
+            --sidebar-w: 240px;
+            --header-h: 56px;
+            --radius: 8px;
+            --radius-lg: 12px;
+            --font-ui: 'Inter', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+            --transition: 150ms ease;
+        }
+
+        [data-theme="light"] {
+            --bg-base: #f1f5f9;
+            --bg-surface: #ffffff;
+            --bg-elevated: #f8fafc;
+            --bg-hover: #f1f5f9;
+            --bg-input: #f8fafc;
+            --border: #e2e8f0;
+            --border-subtle: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --text-tertiary: #94a3b8;
+            --accent: #0891b2;
+            --accent-dim: rgba(8,145,178,0.08);
+            --green: #059669;
+            --green-dim: rgba(5,150,105,0.08);
+            --amber: #d97706;
+            --amber-dim: rgba(217,119,6,0.08);
+            --red: #dc2626;
+            --red-dim: rgba(220,38,38,0.08);
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        html { height: 100%; }
+        body {
+            font-family: var(--font-ui);
+            background: var(--bg-base);
+            color: var(--text-primary);
+            height: 100%;
+            overflow: hidden;
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: var(--sidebar-w) 1fr;
+            grid-template-rows: var(--header-h) 1fr;
+            height: 100vh;
+            grid-template-areas: "sidebar header" "sidebar main";
+        }
+
+        /* ── Sidebar ─────────────────────────────── */
+        .sidebar {
+            grid-area: sidebar;
+            background: var(--bg-surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            z-index: 40;
+        }
+        .sidebar-brand {
+            height: var(--header-h);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid var(--border);
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .sidebar-brand .brand-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--accent), #06b6d4);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; color: #0a0f1a; font-weight: 700;
+        }
+        .sidebar-brand h1 {
+            font-size: 15px; font-weight: 700;
+            letter-spacing: -0.02em; color: var(--text-primary);
+        }
+        .sidebar-brand h1 span { color: var(--accent); }
+
+        .sidebar-nav {
+            flex: 1; padding: 16px 12px;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+        .nav-label {
+            font-size: 10px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            color: var(--text-tertiary); padding: 16px 12px 6px;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 12px; border-radius: 6px; cursor: pointer;
+            color: var(--text-secondary); font-size: 13px; font-weight: 500;
+            transition: all var(--transition);
+            border: 1px solid transparent; user-select: none;
+        }
+        .nav-item i { width: 18px; text-align: center; font-size: 14px; }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-item.active {
+            background: var(--accent-dim); color: var(--accent);
+            border-color: rgba(34,211,238,0.15);
+        }
+        .nav-item .badge {
+            margin-left: auto; font-family: var(--font-mono);
+            font-size: 11px; font-weight: 500; padding: 1px 7px;
+            border-radius: 10px; background: var(--bg-hover); color: var(--text-tertiary);
+        }
+        .nav-item.active .badge { background: rgba(34,211,238,0.15); color: var(--accent); }
+
+        .sidebar-footer {
+            padding: 16px; border-top: 1px solid var(--border); flex-shrink: 0;
+        }
+        .sidebar-status {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: var(--text-tertiary);
+        }
+        .sidebar-status .pulse {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 0 0 rgba(16,185,129,0.4);
+            animation: pulse-ring 2s ease infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+        }
+
+        /* ── Header ──────────────────────────────── */
+        .header {
+            grid-area: header; height: var(--header-h);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; background: var(--bg-surface);
+        }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .page-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        .live-indicator {
+            display: flex; align-items: center; gap: 6px;
+            font-family: var(--font-mono); font-size: 11px; color: var(--green);
+            background: var(--green-dim); padding: 4px 10px;
+            border-radius: 20px; border: 1px solid rgba(16,185,129,0.2);
+        }
+        .live-indicator .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--green); animation: pulse-ring 2s ease infinite;
+        }
+
+        .header-btn {
+            width: 34px; height: 34px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: var(--radius); border: 1px solid var(--border);
+            background: transparent; color: var(--text-secondary);
+            cursor: pointer; font-size: 14px; transition: all var(--transition);
+        }
+        .header-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--text-tertiary); }
+
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 14px; border-radius: var(--radius); border: none;
+            background: var(--accent); color: #0a0f1a;
+            font-family: var(--font-ui); font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all var(--transition);
+        }
+        .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+
+        .btn-ghost {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 7px 14px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: transparent;
+            color: var(--text-secondary); font-family: var(--font-ui);
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            transition: all var(--transition);
+        }
+        .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        /* ── Main ────────────────────────────────── */
+        .main {
+            grid-area: main; overflow-y: auto;
+            padding: 24px; scroll-behavior: smooth;
+        }
+        .main::-webkit-scrollbar { width: 6px; }
+        .main::-webkit-scrollbar-track { background: transparent; }
+        .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .view { display: none; animation: fadeUp 0.2s ease; }
+        .view.active { display: block; }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── KPI Cards ───────────────────────────── */
+        .kpi-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 16px; margin-bottom: 24px;
+        }
+        .kpi-card {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 20px;
+            position: relative; overflow: hidden;
+            transition: border-color var(--transition);
+        }
+        .kpi-card:hover { border-color: var(--text-tertiary); }
+        .kpi-card .kpi-icon {
+            width: 36px; height: 36px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; margin-bottom: 14px;
+        }
+        .kpi-card .kpi-label {
+            font-size: 12px; font-weight: 500; color: var(--text-tertiary);
+            text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px;
+        }
+        .kpi-card .kpi-value {
+            font-family: var(--font-mono); font-size: 28px; font-weight: 600;
+            letter-spacing: -0.03em; line-height: 1.1;
+        }
+        .kpi-card .kpi-sub {
+            font-size: 12px; color: var(--text-tertiary);
+            margin-top: 6px; font-family: var(--font-mono);
+        }
+        .kpi-card.kpi-total .kpi-icon { background: var(--accent-dim); color: var(--accent); }
+        .kpi-card.kpi-online .kpi-icon { background: var(--green-dim); color: var(--green); }
+        .kpi-card.kpi-offline .kpi-icon { background: var(--red-dim); color: var(--red); }
+        .kpi-card.kpi-latency .kpi-icon { background: var(--amber-dim); color: var(--amber); }
+        .kpi-card.kpi-online .kpi-value { color: var(--green); }
+        .kpi-card.kpi-offline .kpi-value { color: var(--red); }
+
+        /* ── Toolbar ─────────────────────────────── */
+        .toolbar {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .search-box {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 0 12px;
+            flex: 1; min-width: 200px; max-width: 360px;
+            transition: border-color var(--transition);
+        }
+        .search-box:focus-within { border-color: var(--accent); }
+        .search-box i { color: var(--text-tertiary); font-size: 13px; }
+        .search-box input {
+            flex: 1; border: none; background: transparent;
+            color: var(--text-primary); font-family: var(--font-ui);
+            font-size: 13px; padding: 8px 0; outline: none;
+        }
+        .search-box input::placeholder { color: var(--text-tertiary); }
+
+        .filter-select {
+            padding: 8px 30px 8px 12px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--bg-input);
+            color: var(--text-secondary); font-family: var(--font-ui);
+            font-size: 13px; cursor: pointer; outline: none;
+            transition: border-color var(--transition);
+            -webkit-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%235a6882' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 10px center;
+        }
+        .filter-select:focus { border-color: var(--accent); }
+
+        /* ── Device Cards ────────────────────────── */
+        .device-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 14px;
+        }
+        .device-card {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 18px;
+            transition: all var(--transition); position: relative; overflow: hidden;
+        }
+        .device-card::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 3px; border-radius: 3px 0 0 3px;
+            transition: background var(--transition);
+        }
+        .device-card.online::before { background: var(--green); }
+        .device-card.offline::before { background: var(--red); }
+        .device-card:hover {
+            border-color: var(--text-tertiary);
+            transform: translateY(-1px); box-shadow: var(--shadow-md);
+        }
+        .device-card-header {
+            display: flex; justify-content: space-between;
+            align-items: flex-start; margin-bottom: 12px;
+        }
+        .device-info h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 2px; }
+        .device-info .device-ip { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
+
+        .status-dot {
+            width: 9px; height: 9px; border-radius: 50%;
+            flex-shrink: 0; margin-top: 4px;
+        }
+        .status-dot.online {
+            background: var(--green);
+            box-shadow: 0 0 0 0 rgba(16,185,129,0.4);
+            animation: pulse-ring 2s ease infinite;
+        }
+        .status-dot.offline { background: var(--red); }
+
+        .device-latency {
+            font-family: var(--font-mono); font-size: 32px; font-weight: 600;
+            letter-spacing: -0.04em; line-height: 1; margin-bottom: 4px;
+        }
+        .device-latency .unit { font-size: 14px; font-weight: 400; color: var(--text-tertiary); margin-left: 2px; }
+        .device-latency.good { color: var(--green); }
+        .device-latency.warn { color: var(--amber); }
+        .device-latency.bad { color: var(--red); }
+        .device-latency.down { color: var(--red); font-size: 18px; }
+
+        .device-sparkline {
+            margin-top: 12px; border-top: 1px solid var(--border-subtle); padding-top: 12px;
+        }
+        .device-sparkline svg { width: 100%; height: 40px; display: block; }
+
+        .device-card-footer {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-top: 10px;
+        }
+        .device-category {
+            font-size: 11px; font-weight: 500; text-transform: uppercase;
+            letter-spacing: 0.04em; padding: 2px 8px; border-radius: 4px;
+            background: var(--bg-hover); color: var(--text-tertiary);
+        }
+        .device-delete {
+            opacity: 0; border: none; background: transparent;
+            color: var(--text-tertiary); cursor: pointer; padding: 4px;
+            border-radius: 4px; font-size: 12px; transition: all var(--transition);
+        }
+        .device-card:hover .device-delete { opacity: 1; }
+        .device-delete:hover { color: var(--red); background: var(--red-dim); }
+
+        /* ── Server Cards ────────────────────────── */
+        .server-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 14px;
+        }
+        .server-card {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 20px;
+            transition: all var(--transition);
+        }
+        .server-card:hover {
+            border-color: var(--text-tertiary);
+            transform: translateY(-1px); box-shadow: var(--shadow-md);
+        }
+        .server-card-header {
+            display: flex; justify-content: space-between;
+            align-items: center; margin-bottom: 16px;
+        }
+        .server-name { font-size: 15px; font-weight: 600; }
+        .server-status {
+            font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.04em;
+            padding: 3px 10px; border-radius: 20px;
+        }
+        .server-status.online { background: var(--green-dim); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+        .server-status.reachable { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+        .server-status.offline { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+
+        .server-meta { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+        .server-meta-row {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-secondary);
+        }
+        .server-meta-row i { width: 16px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+        .server-meta-row .mono { font-family: var(--font-mono); font-size: 12px; }
+
+        .server-checks { display: flex; gap: 12px; margin-bottom: 16px; }
+        .check-badge {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 12px; font-weight: 500; padding: 4px 10px;
+            border-radius: 6px; background: var(--bg-hover); color: var(--text-secondary);
+        }
+        .check-badge.pass { color: var(--green); }
+        .check-badge.fail { color: var(--red); }
+
+        .server-actions { display: flex; gap: 8px; }
+        .ssh-copy-btn {
+            flex: 1; display: flex; align-items: center; justify-content: center;
+            gap: 6px; padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius); background: var(--bg-input);
+            color: var(--text-secondary); font-family: var(--font-mono);
+            font-size: 12px; cursor: pointer; transition: all var(--transition);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .ssh-copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .ssh-copy-btn.copied { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+
+        .server-delete-btn {
+            width: 36px; height: 36px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: transparent; color: var(--text-tertiary);
+            cursor: pointer; font-size: 13px; flex-shrink: 0;
+            transition: all var(--transition);
+        }
+        .server-delete-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+        /* ── Modal ───────────────────────────────── */
+        .modal-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            z-index: 100; display: none;
+            align-items: center; justify-content: center;
+            animation: fadeIn 0.15s ease;
+        }
+        .modal-backdrop.open { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .modal {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); width: 440px; max-width: 95vw;
+            box-shadow: var(--shadow-lg); animation: modalSlide 0.2s ease;
+        }
+        @keyframes modalSlide {
+            from { opacity: 0; transform: translateY(12px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .modal-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 18px 22px; border-bottom: 1px solid var(--border);
+        }
+        .modal-header h2 { font-size: 16px; font-weight: 600; }
+        .modal-close {
+            width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center;
+            border: none; background: transparent; color: var(--text-tertiary);
+            cursor: pointer; border-radius: 6px; font-size: 16px;
+            transition: all var(--transition);
+        }
+        .modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .modal-body { padding: 22px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block; font-size: 12px; font-weight: 500;
+            color: var(--text-secondary); margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%; padding: 9px 12px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--bg-input);
+            color: var(--text-primary); font-family: var(--font-ui);
+            font-size: 13px; outline: none; transition: border-color var(--transition);
+        }
+        .form-group input:focus { border-color: var(--accent); }
+        .form-group input::placeholder { color: var(--text-tertiary); }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 22px 18px; }
+
+        /* ── Empty State ─────────────────────────── */
+        .empty-state {
+            text-align: center; padding: 60px 20px; color: var(--text-tertiary);
+        }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+        .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+        .empty-state p { font-size: 13px; max-width: 300px; margin: 0 auto; }
+
+        /* ── Toasts ──────────────────────────────── */
+        .toast-container {
+            position: fixed; top: 16px; right: 16px; z-index: 200;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+        }
+        .toast {
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 12px 16px;
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px; box-shadow: var(--shadow-lg);
+            animation: toastIn 0.25s ease; pointer-events: all;
+            min-width: 280px; max-width: 400px;
+        }
+        .toast.removing { animation: toastOut 0.2s ease forwards; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateX(20px); } }
+        .toast.success { border-left: 3px solid var(--green); }
+        .toast.error { border-left: 3px solid var(--red); }
+        .toast.warning { border-left: 3px solid var(--amber); }
+        .toast.info { border-left: 3px solid var(--accent); }
+        .toast i { font-size: 15px; }
+        .toast.success i { color: var(--green); }
+        .toast.error i { color: var(--red); }
+        .toast.warning i { color: var(--amber); }
+        .toast.info i { color: var(--accent); }
+
+        /* ── Section ─────────────────────────────── */
+        .section-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .section-header h2 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+
+        .footer {
+            text-align: center; padding: 24px; font-size: 12px;
+            color: var(--text-tertiary); border-top: 1px solid var(--border-subtle);
+            margin-top: 32px;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+
+        /* ── Mobile ──────────────────────────────── */
+        .mobile-toggle {
+            display: none; border: none; background: transparent;
+            color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 4px;
+        }
+        @media (max-width: 900px) {
+            .app { grid-template-columns: 1fr; grid-template-areas: "header" "main"; }
+            .sidebar {
+                position: fixed; left: -260px; top: 0; bottom: 0;
+                width: 260px; z-index: 50; transition: left 0.25s ease;
+                box-shadow: var(--shadow-lg);
+            }
+            .sidebar.open { left: 0; }
+            .mobile-toggle { display: block; }
+            .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+            .device-grid, .server-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 500px) {
+            .kpi-grid { grid-template-columns: 1fr; }
+            .toolbar { flex-direction: column; }
+            .search-box { max-width: none; }
+        }
+
+        .value-update { animation: valueFlash 0.4s ease; }
+        @keyframes valueFlash { 0% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Mobile sidebar overlay */
+        .sidebar-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); z-index: 45;
+        }
+        .sidebar.open ~ .sidebar-overlay { display: block; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon"><i class="fas fa-tower-broadcast"></i></div>
+                <h1>Rell<span>Cloud</span></h1>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-label">Monitoring</div>
+                <div class="nav-item active" data-view="overview" onclick="switchView('overview')">
+                    <i class="fas fa-chart-line"></i> Overview
+                </div>
+                <div class="nav-item" data-view="devices" onclick="switchView('devices')">
+                    <i class="fas fa-ethernet"></i> Devices
+                    <span class="badge" id="nav-device-count">0</span>
+                </div>
+                <div class="nav-item" data-view="servers" onclick="switchView('servers')">
+                    <i class="fas fa-server"></i> Servers
+                    <span class="badge" id="nav-server-count">0</span>
+                </div>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-status">
+                    <div class="pulse"></div>
+                    <span id="sidebar-timestamp">Connecting...</span>
+                </div>
+            </div>
+        </aside>
+
+        <header class="header">
+            <div class="header-left">
+                <button class="mobile-toggle" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                <span class="page-title" id="page-title">Overview</span>
+            </div>
+            <div class="header-right">
+                <div class="live-indicator"><div class="dot"></div>LIVE</div>
+                <button class="header-btn" onclick="toggleTheme()" title="Toggle theme"><i class="fas fa-moon" id="theme-icon"></i></button>
+                <button class="header-btn" onclick="refreshAll()" title="Refresh"><i class="fas fa-arrows-rotate"></i></button>
+            </div>
+        </header>
+
+        <main class="main">
+            <!-- Overview -->
+            <div class="view active" id="view-overview">
+                <div class="kpi-grid">
+                    <div class="kpi-card kpi-total">
+                        <div class="kpi-icon"><i class="fas fa-ethernet"></i></div>
+                        <div class="kpi-label">Total Devices</div>
+                        <div class="kpi-value" id="kpi-total">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-total-sub">loading</div>
+                    </div>
+                    <div class="kpi-card kpi-online">
+                        <div class="kpi-icon"><i class="fas fa-signal"></i></div>
+                        <div class="kpi-label">Online</div>
+                        <div class="kpi-value" id="kpi-online">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-online-sub">loading</div>
+                    </div>
+                    <div class="kpi-card kpi-offline">
+                        <div class="kpi-icon"><i class="fas fa-circle-xmark"></i></div>
+                        <div class="kpi-label">Offline</div>
+                        <div class="kpi-value" id="kpi-offline">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-offline-sub">loading</div>
+                    </div>
+                    <div class="kpi-card kpi-latency">
+                        <div class="kpi-icon"><i class="fas fa-gauge-high"></i></div>
+                        <div class="kpi-label">Avg Latency</div>
+                        <div class="kpi-value" id="kpi-latency">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-latency-sub">loading</div>
+                    </div>
+                </div>
+                <div class="section-header">
+                    <h2>All Devices</h2>
+                    <button class="btn-primary" onclick="openModal('device')"><i class="fas fa-plus"></i> Add Device</button>
+                </div>
+                <div id="overview-devices" class="device-grid"></div>
+                <div class="section-header" style="margin-top:32px">
+                    <h2>Servers</h2>
+                    <button class="btn-primary" onclick="openModal('server')"><i class="fas fa-plus"></i> Add Server</button>
+                </div>
+                <div id="overview-servers" class="server-grid"></div>
+                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps &mdash; Network Monitoring Platform</div>
+            </div>
+
+            <!-- Devices -->
+            <div class="view" id="view-devices">
+                <div class="section-header">
+                    <h2>Devices</h2>
+                    <button class="btn-primary" onclick="openModal('device')"><i class="fas fa-plus"></i> Add Device</button>
+                </div>
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="device-search" placeholder="Search devices..." oninput="handleSearch()">
+                    </div>
+                    <select class="filter-select" id="category-filter" onchange="applyFilters()">
+                        <option value="all">All Categories</option>
+                        <option value="router">Routers</option>
+                        <option value="pi">Raspberry Pi</option>
+                        <option value="iot">IoT Devices</option>
+                        <option value="server">Servers</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <select class="filter-select" id="sort-filter" onchange="applyFilters()">
+                        <option value="name">Name A-Z</option>
+                        <option value="latency">Latency Low-High</option>
+                        <option value="status">Status</option>
+                    </select>
+                </div>
+                <div id="devices-grid" class="device-grid"></div>
+                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps</div>
+            </div>
+
+            <!-- Servers -->
+            <div class="view" id="view-servers">
+                <div class="section-header">
+                    <h2>Servers</h2>
+                    <button class="btn-primary" onclick="openModal('server')"><i class="fas fa-plus"></i> Add Server</button>
+                </div>
+                <div id="servers-grid" class="server-grid"></div>
+                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Device Modal -->
+    <div class="modal-backdrop" id="modal-device">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Add Device</h2>
+                <button class="modal-close" onclick="closeModal('device')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Device Name</label>
+                    <input type="text" id="inp-device-name" placeholder="e.g. Living Room Switch">
+                </div>
+                <div class="form-group">
+                    <label>IP Address</label>
+                    <input type="text" id="inp-device-ip" placeholder="e.g. 192.168.4.100">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeModal('device')">Cancel</button>
+                <button class="btn-primary" onclick="addDevice()">Add Device</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Modal -->
+    <div class="modal-backdrop" id="modal-server">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Add Server</h2>
+                <button class="modal-close" onclick="closeModal('server')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="inp-server-name" placeholder="e.g. Production DB">
+                </div>
+                <div class="form-group">
+                    <label>Host / IP</label>
+                    <input type="text" id="inp-server-host" placeholder="e.g. 192.168.4.200">
+                </div>
+                <div class="form-group">
+                    <label>SSH Port</label>
+                    <input type="number" id="inp-server-port" value="22" placeholder="22">
+                </div>
+                <div class="form-group">
+                    <label>SSH Username</label>
+                    <input type="text" id="inp-server-user" placeholder="e.g. admin">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="inp-server-desc" placeholder="Optional description">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-ghost" onclick="closeModal('server')">Cancel</button>
+                <button class="btn-primary" onclick="addServer()">Add Server</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script>
+    const state = {
+        currentView: 'overview',
+        devices: {},
+        servers: {},
+        stats: { total: 0, online: 0, offline: 0, avg_latency: 0 },
+        history: {},
+        previousStatus: {},
+        config: {},
+        searchTerm: '',
+        categoryFilter: 'all',
+        sortBy: 'name'
+    };
+
+    const HISTORY_MAX = 60;
+    const REFRESH_MS = 2000;
+    const SERVER_REFRESH_MS = 15000;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadConfig();
+        refreshAll();
+        setInterval(refreshDeviceData, REFRESH_MS);
+        setInterval(refreshServerData, SERVER_REFRESH_MS);
+    });
+
+    function switchView(view) {
+        state.currentView = view;
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === view));
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const el = document.getElementById('view-' + view);
+        if (el) el.classList.add('active');
+        const titles = { overview: 'Overview', devices: 'Devices', servers: 'Servers' };
+        document.getElementById('page-title').textContent = titles[view] || 'Overview';
+        document.getElementById('sidebar').classList.remove('open');
+        if (view === 'servers') refreshServerData();
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    function toggleTheme() {
+        const html = document.documentElement;
+        const isDark = html.getAttribute('data-theme') === 'dark';
+        html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        document.getElementById('theme-icon').className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    async function loadConfig() {
+        try {
+            const r = await fetch('/api/config');
+            state.config = await r.json();
+        } catch (e) { /* optional */ }
+    }
+
+    async function refreshAll() {
+        await Promise.all([refreshDeviceData(), refreshServerData()]);
+    }
+
+    async function refreshDeviceData() {
+        try {
+            const r = await fetch('/api/data');
+            const data = await r.json();
+            if (data.error) return;
+            const devices = data.devices || {};
+            const ts = data.timestamp || '';
+
+            for (const [name, info] of Object.entries(devices)) {
+                const wasOnline = state.previousStatus[name];
+                const isOnline = info.reachable;
+                if (wasOnline === true && isOnline === false) {
+                    toast(name + ' went offline', 'error');
+                    sendWebhook(name, 'offline', info.ip);
+                } else if (wasOnline === false && isOnline === true) {
+                    toast(name + ' is back online', 'success');
+                }
+                if (isOnline && info.latency > 200) {
+                    toast(name + ' high latency: ' + info.latency.toFixed(1) + 'ms', 'warning');
+                }
+                state.previousStatus[name] = isOnline;
+                if (!state.history[name]) state.history[name] = [];
+                if (isOnline && info.latency != null) {
+                    state.history[name].push(info.latency);
+                    if (state.history[name].length > HISTORY_MAX) state.history[name].shift();
+                }
+            }
+
+            state.devices = devices;
+            const total = Object.keys(devices).length;
+            const online = Object.values(devices).filter(d => d.reachable).length;
+            const offline = total - online;
+            const lats = Object.values(devices).filter(d => d.reachable && d.latency).map(d => d.latency);
+            const avg = lats.length ? lats.reduce((a, b) => a + b, 0) / lats.length : 0;
+            state.stats = { total, online, offline, avg_latency: avg, timestamp: ts };
+
+            renderKPIs();
+            renderDevices();
+            updateTimestamp(ts);
+            updateNavBadges();
+        } catch (e) { /* retry next cycle */ }
+    }
+
+    async function refreshServerData() {
+        try {
+            const r = await fetch('/api/servers');
+            const data = await r.json();
+            if (!data.error) {
+                state.servers = data;
+                renderServers();
+                updateNavBadges();
+            }
+        } catch (e) { /* retry */ }
+    }
+
+    function renderKPIs() {
+        const s = state.stats;
+        animateValue('kpi-total', s.total);
+        animateValue('kpi-online', s.online);
+        animateValue('kpi-offline', s.offline);
+        const latEl = document.getElementById('kpi-latency');
+        latEl.innerHTML = s.avg_latency > 0 ? s.avg_latency.toFixed(1) + '<span class="unit">ms</span>' : '&mdash;';
+        latEl.classList.add('value-update');
+        setTimeout(() => latEl.classList.remove('value-update'), 400);
+
+        const pct = s.total > 0 ? Math.round((s.online / s.total) * 100) : 0;
+        document.getElementById('kpi-total-sub').textContent = s.total + ' monitored';
+        document.getElementById('kpi-online-sub').textContent = s.total > 0 ? pct + '% uptime' : '\u2014';
+        document.getElementById('kpi-offline-sub').textContent = s.offline > 0 ? s.offline + ' unreachable' : 'all clear';
+        const latQuality = s.avg_latency <= 0 ? '\u2014' : s.avg_latency < 10 ? 'excellent' : s.avg_latency < 50 ? 'good' : s.avg_latency < 100 ? 'fair' : 'poor';
+        document.getElementById('kpi-latency-sub').textContent = latQuality;
+    }
+
+    function animateValue(id, val) {
+        const el = document.getElementById(id);
+        if (el.textContent !== String(val)) {
+            el.textContent = val;
+            el.classList.add('value-update');
+            setTimeout(() => el.classList.remove('value-update'), 400);
+        }
+    }
+
+    function renderDevices() {
+        let filtered = Object.entries(state.devices);
+        if (state.searchTerm) {
+            const q = state.searchTerm.toLowerCase();
+            filtered = filtered.filter(([name, d]) => name.toLowerCase().includes(q) || (d.ip && d.ip.includes(q)));
+        }
+        if (state.categoryFilter !== 'all') {
+            filtered = filtered.filter(([name]) => categorize(name) === state.categoryFilter);
+        }
+        filtered.sort((a, b) => {
+            if (state.sortBy === 'name') return a[0].localeCompare(b[0]);
+            if (state.sortBy === 'latency') return (a[1].latency || 9999) - (b[1].latency || 9999);
+            if (state.sortBy === 'status') return (b[1].reachable ? 1 : 0) - (a[1].reachable ? 1 : 0);
+            return 0;
+        });
+        renderDeviceGrid('overview-devices', filtered);
+        renderDeviceGrid('devices-grid', filtered);
+    }
+
+    function renderDeviceGrid(containerId, entries) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-satellite-dish"></i><h3>No devices found</h3><p>' + (state.searchTerm ? 'Try a different search term' : 'Add your first device to start monitoring') + '</p></div>';
+            return;
+        }
+        const currentKeys = entries.map(([n]) => n).join(',');
+        if (container.dataset.keys === currentKeys) {
+            entries.forEach(([name, device]) => updateDeviceCardInPlace(container, name, device));
+            return;
+        }
+        container.dataset.keys = currentKeys;
+        container.innerHTML = entries.map(([name, device]) => buildDeviceCard(name, device)).join('');
+    }
+
+    function buildDeviceCard(name, device) {
+        const online = device.reachable;
+        const latency = device.latency;
+        const cat = categorize(name);
+        const latClass = !online ? 'down' : latency < 10 ? 'good' : latency < 100 ? 'warn' : 'bad';
+        const sparkSvg = buildSparkline(state.history[name] || [], online);
+        const safeName = esc(name);
+        return '<div class="device-card ' + (online ? 'online' : 'offline') + '" data-device="' + safeName + '">'
+            + '<div class="device-card-header"><div class="device-info"><h3>' + safeName + '</h3>'
+            + '<div class="device-ip">' + esc(device.ip || '\u2014') + '</div></div>'
+            + '<div class="status-dot ' + (online ? 'online' : 'offline') + '"></div></div>'
+            + '<div class="device-latency ' + latClass + '" data-lat="' + safeName + '">'
+            + (online && latency != null ? latency.toFixed(1) + '<span class="unit">ms</span>' : 'OFFLINE') + '</div>'
+            + '<div class="device-sparkline" data-spark="' + safeName + '">' + sparkSvg + '</div>'
+            + '<div class="device-card-footer"><span class="device-category">' + cat + '</span>'
+            + '<button class="device-delete" onclick="deleteDevice(\'' + safeName.replace(/'/g, "\\'") + '\')" title="Remove"><i class="fas fa-trash-can"></i></button>'
+            + '</div></div>';
+    }
+
+    function updateDeviceCardInPlace(container, name, device) {
+        const safeName = esc(name);
+        const card = container.querySelector('[data-device="' + safeName + '"]');
+        if (!card) return;
+        const online = device.reachable;
+        card.className = 'device-card ' + (online ? 'online' : 'offline');
+        const latEl = card.querySelector('[data-lat="' + safeName + '"]');
+        if (latEl) {
+            const latency = device.latency;
+            const latClass = !online ? 'down' : latency < 10 ? 'good' : latency < 100 ? 'warn' : 'bad';
+            const newHtml = online && latency != null ? latency.toFixed(1) + '<span class="unit">ms</span>' : 'OFFLINE';
+            if (latEl.innerHTML !== newHtml) {
+                latEl.innerHTML = newHtml;
+                latEl.className = 'device-latency ' + latClass;
+                latEl.classList.add('value-update');
+                setTimeout(() => latEl.classList.remove('value-update'), 400);
+            }
+        }
+        const sparkEl = card.querySelector('[data-spark="' + safeName + '"]');
+        if (sparkEl) sparkEl.innerHTML = buildSparkline(state.history[name] || [], online);
+    }
+
+    function renderServers() {
+        const entries = Object.entries(state.servers);
+        renderServerGrid('overview-servers', entries);
+        renderServerGrid('servers-grid', entries);
+    }
+
+    function renderServerGrid(containerId, entries) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><i class="fas fa-server"></i><h3>No servers configured</h3><p>Add servers to monitor SSH connectivity</p></div>';
+            return;
+        }
+        container.innerHTML = entries.map(([name, srv]) => {
+            const safeName = esc(name);
+            const st = srv.status || 'offline';
+            return '<div class="server-card"><div class="server-card-header">'
+                + '<span class="server-name">' + safeName + '</span>'
+                + '<span class="server-status ' + st + '">' + st + '</span></div>'
+                + '<div class="server-meta">'
+                + (srv.description ? '<div class="server-meta-row"><i class="fas fa-info-circle"></i>' + esc(srv.description) + '</div>' : '')
+                + '<div class="server-meta-row"><i class="fas fa-network-wired"></i><span class="mono">' + esc(srv.host) + ':' + srv.port + '</span></div>'
+                + '<div class="server-meta-row"><i class="fas fa-user"></i>' + esc(srv.user) + '</div></div>'
+                + '<div class="server-checks">'
+                + '<span class="check-badge ' + (srv.ssh_online ? 'pass' : 'fail') + '"><i class="fas fa-' + (srv.ssh_online ? 'check' : 'xmark') + '"></i> SSH</span>'
+                + '<span class="check-badge ' + (srv.ping_online ? 'pass' : 'fail') + '"><i class="fas fa-' + (srv.ping_online ? 'check' : 'xmark') + '"></i> Ping</span></div>'
+                + '<div class="server-actions">'
+                + '<button class="ssh-copy-btn" onclick="copySSH(this,\'' + escAttr(srv.ssh_command || '') + '\')"><i class="fas fa-copy"></i> ' + esc(srv.ssh_command || '\u2014') + '</button>'
+                + '<button class="server-delete-btn" onclick="deleteServer(\'' + safeName.replace(/'/g, "\\'") + '\')" title="Delete"><i class="fas fa-trash-can"></i></button>'
+                + '</div></div>';
+        }).join('');
+    }
+
+    function buildSparkline(data, online) {
+        if (!data || data.length < 2) {
+            return '<svg viewBox="0 0 200 40"><text x="100" y="24" text-anchor="middle" fill="var(--text-tertiary)" font-size="11" font-family="var(--font-mono)">awaiting data...</text></svg>';
+        }
+        const w = 200, h = 40, pad = 2;
+        const max = Math.max(...data, 1);
+        const min = Math.min(...data, 0);
+        const range = max - min || 1;
+        const pts = data.map((v, i) => {
+            const x = pad + (i / (data.length - 1)) * (w - 2 * pad);
+            const y = h - pad - ((v - min) / range) * (h - 2 * pad);
+            return x.toFixed(1) + ',' + y.toFixed(1);
+        });
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        const lineColor = !online ? 'var(--red)' : avg < 10 ? 'var(--green)' : avg < 100 ? 'var(--accent)' : 'var(--amber)';
+        const fillColor = !online ? 'var(--red-dim)' : 'rgba(34,211,238,0.08)';
+        const polyline = pts.join(' ');
+        const lastPt = pts[pts.length - 1].split(',');
+        return '<svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">'
+            + '<polygon points="' + polyline + ' ' + (w - pad) + ',' + (h - pad) + ' ' + pad + ',' + (h - pad) + '" fill="' + fillColor + '" />'
+            + '<polyline points="' + polyline + '" fill="none" stroke="' + lineColor + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />'
+            + '<circle cx="' + lastPt[0] + '" cy="' + lastPt[1] + '" r="2.5" fill="' + lineColor + '" />'
+            + '</svg>';
+    }
+
+    function categorize(name) {
+        const n = name.toLowerCase();
+        if (n.includes('router') || n.includes('gateway') || n.includes('mesh') || n.includes('ap')) return 'router';
+        if (n.includes('rpi') || n.includes('raspberry') || n.includes('pi')) return 'pi';
+        if (n.includes('iot') || n.includes('sensor') || n.includes('cam') || n.includes('plug') || n.includes('switch') || n.includes('bulb')) return 'iot';
+        if (n.includes('server') || n.includes('vm') || n.includes('node') || n.includes('db') || n.includes('nas')) return 'server';
+        return 'other';
+    }
+
+    let searchTimeout;
+    function handleSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            state.searchTerm = document.getElementById('device-search').value;
+            applyFilters();
+        }, 200);
+    }
+
+    function applyFilters() {
+        state.categoryFilter = document.getElementById('category-filter').value;
+        state.sortBy = document.getElementById('sort-filter').value;
+        renderDevices();
+    }
+
+    function updateNavBadges() {
+        document.getElementById('nav-device-count').textContent = Object.keys(state.devices).length;
+        document.getElementById('nav-server-count').textContent = Object.keys(state.servers).length;
+    }
+
+    function updateTimestamp(ts) {
+        const el = document.getElementById('sidebar-timestamp');
+        if (!ts) { el.textContent = 'Connecting...'; return; }
+        try {
+            const d = new Date(ts);
+            el.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch (e) { el.textContent = 'Live'; }
+    }
+
+    async function addDevice() {
+        const name = document.getElementById('inp-device-name').value.trim();
+        const ip = document.getElementById('inp-device-ip').value.trim();
+        if (!name || !ip) { toast('Name and IP are required', 'warning'); return; }
+        if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) { toast('Invalid IP address format', 'warning'); return; }
+        try {
+            const r = await fetch('/api/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ip }) });
+            const data = await r.json();
+            if (r.ok) {
+                toast(name + ' added', 'success');
+                closeModal('device');
+                document.getElementById('inp-device-name').value = '';
+                document.getElementById('inp-device-ip').value = '';
+                refreshDeviceData();
+            } else { toast(data.message || 'Failed to add device', 'error'); }
+        } catch (e) { toast('Network error', 'error'); }
+    }
+
+    async function deleteDevice(name) {
+        if (!confirm('Remove "' + name + '" from monitoring?')) return;
+        try {
+            const r = await fetch('/api/devices', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+            if (r.ok) {
+                toast(name + ' removed', 'info');
+                delete state.history[name];
+                delete state.previousStatus[name];
+                refreshDeviceData();
+            } else { toast('Failed to remove device', 'error'); }
+        } catch (e) { toast('Network error', 'error'); }
+    }
+
+    async function addServer() {
+        const name = document.getElementById('inp-server-name').value.trim();
+        const host = document.getElementById('inp-server-host').value.trim();
+        const port = parseInt(document.getElementById('inp-server-port').value) || 22;
+        const user = document.getElementById('inp-server-user').value.trim();
+        const description = document.getElementById('inp-server-desc').value.trim();
+        if (!name || !host || !user) { toast('Name, host, and user are required', 'warning'); return; }
+        try {
+            const r = await fetch('/api/servers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, host, port, user, description }) });
+            const data = await r.json();
+            if (r.ok) {
+                toast(name + ' added', 'success');
+                closeModal('server');
+                ['inp-server-name', 'inp-server-host', 'inp-server-user', 'inp-server-desc'].forEach(id => document.getElementById(id).value = '');
+                document.getElementById('inp-server-port').value = '22';
+                refreshServerData();
+            } else { toast(data.message || 'Failed to add server', 'error'); }
+        } catch (e) { toast('Network error', 'error'); }
+    }
+
+    async function deleteServer(name) {
+        if (!confirm('Delete server "' + name + '"?')) return;
+        try {
+            const r = await fetch('/api/servers/' + encodeURIComponent(name), { method: 'DELETE' });
+            if (r.ok) { toast(name + ' deleted', 'info'); refreshServerData(); }
+            else { toast('Failed to delete server', 'error'); }
+        } catch (e) { toast('Network error', 'error'); }
+    }
+
+    function copySSH(btn, cmd) {
+        navigator.clipboard.writeText(cmd).then(() => {
+            btn.classList.add('copied');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 1500);
+        }).catch(() => toast('Copy failed', 'error'));
+    }
+
+    function openModal(type) { document.getElementById('modal-' + type).classList.add('open'); }
+    function closeModal(type) { document.getElementById('modal-' + type).classList.remove('open'); }
+
+    document.querySelectorAll('.modal-backdrop').forEach(bd => {
+        bd.addEventListener('click', (e) => { if (e.target === bd) bd.classList.remove('open'); });
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') document.querySelectorAll('.modal-backdrop.open').forEach(m => m.classList.remove('open'));
+    });
+
+    function toast(message, type) {
+        type = type || 'info';
+        const container = document.getElementById('toast-container');
+        const icons = { success: 'fa-check-circle', error: 'fa-circle-exclamation', warning: 'fa-triangle-exclamation', info: 'fa-circle-info' };
+        const el = document.createElement('div');
+        el.className = 'toast ' + type;
+        el.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i><span>' + esc(message) + '</span>';
+        container.appendChild(el);
+        setTimeout(() => { el.classList.add('removing'); setTimeout(() => el.remove(), 200); }, 4000);
+    }
+
+    async function sendWebhook(deviceName, status, ip) {
+        const url = state.config.webhook_url;
+        if (!url) return;
+        try {
+            await fetch(url, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ embeds: [{ title: 'Network Alert: ' + deviceName, description: '**' + deviceName + '** (' + ip + ') is now **' + status.toUpperCase() + '**', color: status === 'offline' ? 0xef4444 : 0x10b981, timestamp: new Date().toISOString(), footer: { text: 'RellCloud NetOps' } }] })
+            });
+        } catch (e) { /* non-critical */ }
+    }
+
+    function esc(str) {
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    function escAttr(str) {
+        return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+    </script>
+</body>
+</html>
