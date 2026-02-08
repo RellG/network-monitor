@@ -3,10 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RellCloud NetOps — Network Monitor</title>
+    <title>Network Monitor — Network Monitor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://unpkg.com/vis-network@9.1.6/dist/vis-network.min.js"></script>
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -567,6 +570,263 @@
             background: rgba(0,0,0,0.5); z-index: 45;
         }
         .sidebar.open ~ .sidebar-overlay { display: block; }
+
+        /* ── Scanner ────────────────────────────── */
+        .scan-controls {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .scan-input {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--bg-input); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 0 12px;
+        }
+        .scan-input input {
+            border: none; background: transparent; color: var(--text-primary);
+            font-family: var(--font-mono); font-size: 13px; padding: 8px 0;
+            outline: none; width: 160px;
+        }
+        .scan-input i { color: var(--text-tertiary); font-size: 13px; }
+        .scan-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); cursor: pointer; }
+        .scan-progress {
+            flex: 1; min-width: 150px; display: flex; align-items: center; gap: 10px;
+        }
+        .progress-bar-outer {
+            flex: 1; height: 6px; background: var(--bg-hover);
+            border-radius: 3px; overflow: hidden;
+        }
+        .progress-bar-inner {
+            height: 100%; background: var(--accent); border-radius: 3px;
+            transition: width 0.5s ease; width: 0%;
+        }
+        .scan-progress-text {
+            font-family: var(--font-mono); font-size: 11px;
+            color: var(--text-tertiary); white-space: nowrap; min-width: 180px;
+        }
+        .scan-table-wrap {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); overflow-x: auto;
+        }
+        .scan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .scan-table th {
+            text-align: left; padding: 10px 14px; font-size: 11px;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--text-tertiary); background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+        }
+        .scan-table th:hover { color: var(--text-primary); }
+        .scan-table td {
+            padding: 10px 14px; border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary); vertical-align: middle;
+        }
+        .scan-table tr:last-child td { border-bottom: none; }
+        .scan-table tr:hover td { background: var(--bg-hover); }
+        .scan-table .mono { font-family: var(--font-mono); font-size: 12px; }
+        .scan-table .ip-cell { color: var(--text-primary); font-weight: 500; }
+        .new-badge {
+            font-size: 10px; font-weight: 600; padding: 1px 6px;
+            border-radius: 4px; background: var(--green-dim); color: var(--green); margin-left: 6px;
+        }
+        .missing-badge {
+            font-size: 10px; font-weight: 600; padding: 1px 6px;
+            border-radius: 4px; background: var(--red-dim); color: var(--red); margin-left: 6px;
+        }
+        .port-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+        .port-tag {
+            font-family: var(--font-mono); font-size: 11px; padding: 1px 6px;
+            border-radius: 4px; background: var(--accent-dim); color: var(--accent);
+        }
+        .type-badge {
+            font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+            text-transform: uppercase; background: var(--bg-hover); color: var(--text-tertiary);
+        }
+        .type-badge.router { background: var(--amber-dim); color: var(--amber); }
+        .type-badge.server { background: var(--accent-dim); color: var(--accent); }
+        .type-badge.pi { background: var(--green-dim); color: var(--green); }
+        .type-badge.iot { background: rgba(168,85,247,0.12); color: #a855f7; }
+        .type-badge.mobile { background: rgba(236,72,153,0.12); color: #ec4899; }
+        .add-monitor-btn {
+            border: none; background: var(--accent-dim); color: var(--accent);
+            font-size: 12px; padding: 4px 10px; border-radius: 4px;
+            cursor: pointer; font-family: var(--font-ui); font-weight: 500;
+            transition: all var(--transition);
+        }
+        .add-monitor-btn:hover { background: var(--accent); color: #0a0f1a; }
+        .port-scan-btn {
+            border: none; background: var(--bg-hover); color: var(--text-secondary);
+            font-size: 11px; padding: 3px 8px; border-radius: 4px;
+            cursor: pointer; font-family: var(--font-mono);
+            transition: all var(--transition);
+        }
+        .port-scan-btn:hover { background: var(--accent-dim); color: var(--accent); }
+
+        /* ── Device Metrics (Loss/Jitter/Uptime) ── */
+        .device-metrics {
+            display: flex; gap: 12px; margin-top: 6px; margin-bottom: 2px;
+        }
+        .device-metric {
+            font-family: var(--font-mono); font-size: 11px;
+            color: var(--text-tertiary); display: flex; align-items: center; gap: 4px;
+        }
+        .device-metric .metric-val { font-weight: 600; }
+        .device-metric .metric-val.loss-good { color: var(--green); }
+        .device-metric .metric-val.loss-warn { color: var(--amber); }
+        .device-metric .metric-val.loss-bad { color: var(--red); }
+        .device-uptime {
+            font-family: var(--font-mono); font-size: 11px;
+            color: var(--text-tertiary); margin-top: 4px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .device-uptime .uptime-val { font-weight: 600; }
+        .device-uptime .uptime-val.up-good { color: var(--green); }
+        .device-uptime .uptime-val.up-warn { color: var(--amber); }
+        .device-uptime .uptime-val.up-bad { color: var(--red); }
+
+        /* ── Device Detail Modal ───────────────── */
+        .detail-modal {
+            width: 680px; max-width: 95vw;
+        }
+        .detail-modal .modal-body { padding: 0; }
+        .detail-header-info {
+            display: flex; align-items: center; gap: 16px;
+            padding: 20px 22px; border-bottom: 1px solid var(--border);
+        }
+        .detail-status-dot {
+            width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+        }
+        .detail-status-dot.online { background: var(--green); box-shadow: 0 0 8px rgba(16,185,129,0.4); }
+        .detail-status-dot.offline { background: var(--red); box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+        .detail-name { font-size: 16px; font-weight: 600; }
+        .detail-ip { font-family: var(--font-mono); font-size: 13px; color: var(--text-tertiary); }
+        .detail-kpis {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+            background: var(--border); border-bottom: 1px solid var(--border);
+        }
+        .detail-kpi {
+            background: var(--bg-surface); padding: 14px 16px; text-align: center;
+        }
+        .detail-kpi .dk-label {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 4px;
+        }
+        .detail-kpi .dk-value {
+            font-family: var(--font-mono); font-size: 20px; font-weight: 600;
+        }
+        .detail-kpi .dk-unit { font-size: 11px; font-weight: 400; color: var(--text-tertiary); }
+        .detail-chart-container {
+            padding: 16px 22px; position: relative; height: 260px;
+        }
+        .detail-chart-container canvas { width: 100% !important; height: 100% !important; }
+        .detail-time-range {
+            display: flex; gap: 4px; padding: 0 22px 8px;
+        }
+        .time-range-btn {
+            padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+            background: transparent; color: var(--text-tertiary); font-size: 11px;
+            font-family: var(--font-mono); cursor: pointer; transition: all var(--transition);
+        }
+        .time-range-btn:hover { border-color: var(--text-tertiary); color: var(--text-primary); }
+        .time-range-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+        .detail-uptime-section {
+            padding: 14px 22px; border-top: 1px solid var(--border);
+            display: flex; gap: 24px;
+        }
+        .detail-uptime-item {
+            text-align: center; flex: 1;
+        }
+        .detail-uptime-item .du-label {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            color: var(--text-tertiary); margin-bottom: 2px;
+        }
+        .detail-uptime-item .du-value {
+            font-family: var(--font-mono); font-size: 18px; font-weight: 600;
+        }
+
+        /* ── KPI Grid Extended ─────────────────── */
+        .kpi-grid-6 {
+            display: grid; grid-template-columns: repeat(6, 1fr);
+            gap: 16px; margin-bottom: 24px;
+        }
+        @media (max-width: 1200px) { .kpi-grid-6 { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 700px) { .kpi-grid-6 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 500px) { .kpi-grid-6 { grid-template-columns: 1fr; } }
+
+        /* ── Topology Map ──────────────────────── */
+        .topology-container {
+            background: var(--bg-surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); height: 500px; position: relative;
+        }
+        .topology-legend {
+            display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px;
+            font-size: 12px; color: var(--text-secondary);
+        }
+        .topology-legend-item {
+            display: flex; align-items: center; gap: 6px;
+        }
+        .topology-legend-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+        }
+
+        /* ── Device Notes/Tags ───────────────────── */
+        .detail-notes-section {
+            padding: 14px 22px; border-top: 1px solid var(--border);
+        }
+        .detail-section-label {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 8px;
+        }
+        .detail-tags {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+        }
+        .tag-chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 10px; border-radius: 12px;
+            background: var(--accent-dim); color: var(--accent);
+            font-size: 11px; font-weight: 500; font-family: var(--font-mono);
+        }
+        .tag-chip .tag-remove {
+            cursor: pointer; opacity: 0.6; font-size: 10px;
+            margin-left: 2px; transition: opacity var(--transition);
+        }
+        .tag-chip .tag-remove:hover { opacity: 1; }
+        .tag-add-input {
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .tag-add-input input {
+            width: 90px; padding: 3px 8px; border-radius: 12px;
+            border: 1px solid var(--border); background: var(--bg-input);
+            color: var(--text-primary); font-size: 11px; font-family: var(--font-mono);
+            outline: none;
+        }
+        .tag-add-input input:focus { border-color: var(--accent); }
+        .detail-notes-textarea {
+            width: 100%; min-height: 60px; max-height: 120px; resize: vertical;
+            padding: 8px 12px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--bg-input);
+            color: var(--text-primary); font-family: var(--font-ui);
+            font-size: 12px; outline: none; line-height: 1.5;
+        }
+        .detail-notes-textarea:focus { border-color: var(--accent); }
+        .detail-category-select {
+            padding: 5px 10px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--bg-input);
+            color: var(--text-secondary); font-family: var(--font-ui);
+            font-size: 12px; cursor: pointer; outline: none;
+        }
+        .detail-category-select:focus { border-color: var(--accent); }
+        .detail-meta-row {
+            display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+        }
+
+        /* ── Tag badges on device cards ─────────── */
+        .device-tags {
+            display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+        }
+        .device-tag-mini {
+            font-size: 9px; font-weight: 500; padding: 1px 6px;
+            border-radius: 8px; background: var(--accent-dim); color: var(--accent);
+            font-family: var(--font-mono);
+        }
     </style>
 </head>
 <body>
@@ -574,7 +834,7 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-brand">
                 <div class="brand-icon"><i class="fas fa-tower-broadcast"></i></div>
-                <h1>Rell<span>Cloud</span></h1>
+                <h1>Net<span>Ops</span></h1>
             </div>
             <nav class="sidebar-nav">
                 <div class="nav-label">Monitoring</div>
@@ -588,6 +848,17 @@
                 <div class="nav-item" data-view="servers" onclick="switchView('servers')">
                     <i class="fas fa-server"></i> Servers
                     <span class="badge" id="nav-server-count">0</span>
+                </div>
+                <div class="nav-label">Tools</div>
+                <div class="nav-item" data-view="scanner" onclick="switchView('scanner')">
+                    <i class="fas fa-satellite-dish"></i> Scanner
+                    <span class="badge" id="nav-scan-count">0</span>
+                </div>
+                <div class="nav-item" data-view="speedtest" onclick="switchView('speedtest')">
+                    <i class="fas fa-gauge-high"></i> Speed Test
+                </div>
+                <div class="nav-item" data-view="topology" onclick="switchView('topology')">
+                    <i class="fas fa-diagram-project"></i> Topology
                 </div>
             </nav>
             <div class="sidebar-footer">
@@ -613,7 +884,7 @@
         <main class="main">
             <!-- Overview -->
             <div class="view active" id="view-overview">
-                <div class="kpi-grid">
+                <div class="kpi-grid-6">
                     <div class="kpi-card kpi-total">
                         <div class="kpi-icon"><i class="fas fa-ethernet"></i></div>
                         <div class="kpi-label">Total Devices</div>
@@ -638,6 +909,44 @@
                         <div class="kpi-value" id="kpi-latency">&mdash;</div>
                         <div class="kpi-sub" id="kpi-latency-sub">loading</div>
                     </div>
+                    <div class="kpi-card" style="--kpi-color: var(--green)">
+                        <div class="kpi-icon" style="background:var(--green-dim);color:var(--green)"><i class="fas fa-heart-pulse"></i></div>
+                        <div class="kpi-label">Packet Loss</div>
+                        <div class="kpi-value" id="kpi-loss">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-loss-sub">loading</div>
+                    </div>
+                    <div class="kpi-card" style="--kpi-color: var(--accent)">
+                        <div class="kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="fas fa-wave-square"></i></div>
+                        <div class="kpi-label">Avg Jitter</div>
+                        <div class="kpi-value" id="kpi-jitter">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-jitter-sub">loading</div>
+                    </div>
+                </div>
+                <div class="kpi-grid" style="margin-bottom:24px">
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:var(--red-dim);color:var(--red)"><i class="fas fa-triangle-exclamation"></i></div>
+                        <div class="kpi-label">Active Alerts</div>
+                        <div class="kpi-value" id="kpi-alerts">0</div>
+                        <div class="kpi-sub" id="kpi-alerts-sub">all clear</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:var(--green-dim);color:var(--green)"><i class="fas fa-shield-halved"></i></div>
+                        <div class="kpi-label">Fleet Uptime</div>
+                        <div class="kpi-value" id="kpi-fleet-uptime">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-fleet-uptime-sub">today</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:var(--amber-dim);color:var(--amber)"><i class="fas fa-ranking-star"></i></div>
+                        <div class="kpi-label">Worst Performer</div>
+                        <div class="kpi-value" id="kpi-worst" style="font-size:16px">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-worst-sub">loading</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="fas fa-bolt"></i></div>
+                        <div class="kpi-label">Last Speed Test</div>
+                        <div class="kpi-value" id="kpi-speedtest" style="font-size:16px">&mdash;</div>
+                        <div class="kpi-sub" id="kpi-speedtest-sub">no tests yet</div>
+                    </div>
                 </div>
                 <div class="section-header">
                     <h2>All Devices</h2>
@@ -649,7 +958,13 @@
                     <button class="btn-primary" onclick="openModal('server')"><i class="fas fa-plus"></i> Add Server</button>
                 </div>
                 <div id="overview-servers" class="server-grid"></div>
-                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps &mdash; Network Monitoring Platform</div>
+                <div class="section-header" style="margin-top:32px">
+                    <h2>Bandwidth</h2>
+                </div>
+                <div style="background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;height:200px;position:relative">
+                    <canvas id="bandwidth-chart"></canvas>
+                </div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps &mdash; Network Monitoring Platform</div>
             </div>
 
             <!-- Devices -->
@@ -678,7 +993,7 @@
                     </select>
                 </div>
                 <div id="devices-grid" class="device-grid"></div>
-                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps</div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps</div>
             </div>
 
             <!-- Servers -->
@@ -688,7 +1003,146 @@
                     <button class="btn-primary" onclick="openModal('server')"><i class="fas fa-plus"></i> Add Server</button>
                 </div>
                 <div id="servers-grid" class="server-grid"></div>
-                <div class="footer">Powered by <a href="#">RellCloud</a> NetOps</div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps</div>
+            </div>
+
+            <!-- Scanner -->
+            <div class="view" id="view-scanner">
+                <div class="section-header">
+                    <h2>Network Scanner</h2>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn-ghost" onclick="exportScanCSV()"><i class="fas fa-download"></i> Export CSV</button>
+                    </div>
+                </div>
+                <div class="scan-controls">
+                    <div class="scan-input">
+                        <i class="fas fa-network-wired"></i>
+                        <input type="text" id="scan-subnet" placeholder="Auto-detect subnet...">
+                    </div>
+                    <label class="scan-check">
+                        <input type="checkbox" id="scan-ports"> Port scan
+                    </label>
+                    <button class="btn-primary" id="scan-btn" onclick="startScan()">
+                        <i class="fas fa-play"></i> Scan Network
+                    </button>
+                    <div class="scan-progress" id="scan-progress" style="display:none">
+                        <div class="progress-bar-outer">
+                            <div class="progress-bar-inner" id="scan-progress-bar"></div>
+                        </div>
+                        <span class="scan-progress-text" id="scan-progress-text">0%</span>
+                    </div>
+                </div>
+                <div class="kpi-grid" id="scan-kpis" style="display:none">
+                    <div class="kpi-card kpi-total">
+                        <div class="kpi-icon"><i class="fas fa-desktop"></i></div>
+                        <div class="kpi-label">Hosts Found</div>
+                        <div class="kpi-value" id="scan-kpi-total">0</div>
+                    </div>
+                    <div class="kpi-card kpi-online">
+                        <div class="kpi-icon"><i class="fas fa-circle-plus"></i></div>
+                        <div class="kpi-label">New Devices</div>
+                        <div class="kpi-value" id="scan-kpi-new">0</div>
+                    </div>
+                    <div class="kpi-card kpi-offline">
+                        <div class="kpi-icon"><i class="fas fa-circle-minus"></i></div>
+                        <div class="kpi-label">Missing</div>
+                        <div class="kpi-value" id="scan-kpi-missing">0</div>
+                    </div>
+                    <div class="kpi-card kpi-latency">
+                        <div class="kpi-icon"><i class="fas fa-plug"></i></div>
+                        <div class="kpi-label">Open Ports</div>
+                        <div class="kpi-value" id="scan-kpi-ports">0</div>
+                    </div>
+                </div>
+                <div class="toolbar" id="scan-toolbar" style="display:none">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="scan-search" placeholder="Filter by IP, hostname, vendor..." oninput="renderScanResults()">
+                    </div>
+                    <select class="filter-select" id="scan-type-filter" onchange="renderScanResults()">
+                        <option value="all">All Types</option>
+                        <option value="router">Routers</option>
+                        <option value="server">Servers</option>
+                        <option value="pi">Raspberry Pi</option>
+                        <option value="iot">IoT</option>
+                        <option value="mobile">Mobile</option>
+                        <option value="unknown">Unknown</option>
+                    </select>
+                </div>
+                <div id="scan-results-container">
+                    <div class="empty-state"><i class="fas fa-satellite-dish" style="font-size:48px;color:var(--text-tertiary);margin-bottom:16px"></i>
+                    <h3>No scan results yet</h3><p style="color:var(--text-tertiary)">Click "Scan Network" to discover devices on your network</p></div>
+                </div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps &mdash; nmap Network Scanner</div>
+            </div>
+
+            <!-- Speed Test -->
+            <div class="view" id="view-speedtest">
+                <div class="section-header">
+                    <h2>Internet Speed Test</h2>
+                </div>
+                <div style="text-align:center;margin-bottom:24px">
+                    <button class="btn-primary" id="speedtest-btn" onclick="startSpeedTest()" style="padding:12px 32px;font-size:15px">
+                        <i class="fas fa-play"></i> Run Speed Test
+                    </button>
+                    <div class="scan-progress" id="speedtest-progress" style="display:none;max-width:500px;margin:16px auto 0">
+                        <div class="progress-bar-outer">
+                            <div class="progress-bar-inner" id="speedtest-progress-bar"></div>
+                        </div>
+                        <span class="scan-progress-text" id="speedtest-progress-text">0%</span>
+                    </div>
+                </div>
+                <div class="kpi-grid" id="speedtest-results" style="display:none">
+                    <div class="kpi-card kpi-online">
+                        <div class="kpi-icon"><i class="fas fa-download"></i></div>
+                        <div class="kpi-label">Download</div>
+                        <div class="kpi-value" id="st-download">&mdash;</div>
+                        <div class="kpi-sub">Mbps</div>
+                    </div>
+                    <div class="kpi-card" style="--kpi-color:var(--accent)">
+                        <div class="kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="fas fa-upload"></i></div>
+                        <div class="kpi-label">Upload</div>
+                        <div class="kpi-value" id="st-upload">&mdash;</div>
+                        <div class="kpi-sub">Mbps</div>
+                    </div>
+                    <div class="kpi-card kpi-latency">
+                        <div class="kpi-icon"><i class="fas fa-stopwatch"></i></div>
+                        <div class="kpi-label">Ping</div>
+                        <div class="kpi-value" id="st-ping">&mdash;</div>
+                        <div class="kpi-sub">ms</div>
+                    </div>
+                    <div class="kpi-card kpi-total">
+                        <div class="kpi-icon"><i class="fas fa-server"></i></div>
+                        <div class="kpi-label">Server</div>
+                        <div class="kpi-value" id="st-server" style="font-size:14px">&mdash;</div>
+                        <div class="kpi-sub" id="st-isp"></div>
+                    </div>
+                </div>
+                <div style="margin-top:24px">
+                    <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">History</h3>
+                    <div style="height:250px;position:relative"><canvas id="speedtest-chart"></canvas></div>
+                </div>
+                <div id="speedtest-history-table"></div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps &mdash; Ookla Speedtest</div>
+            </div>
+
+            <!-- Topology -->
+            <div class="view" id="view-topology">
+                <div class="section-header">
+                    <h2>Network Topology</h2>
+                    <button class="btn-ghost" onclick="refreshTopology()"><i class="fas fa-arrows-rotate"></i> Refresh</button>
+                </div>
+                <div class="topology-container" id="topology-graph"></div>
+                <div class="topology-legend">
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#f59e0b"></div> Router</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#10b981"></div> Raspberry Pi</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#22d3ee"></div> Server</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#a855f7"></div> IoT</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#ec4899"></div> Mobile</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#64748b"></div> Unknown</div>
+                    <div class="topology-legend-item"><div class="topology-legend-dot" style="background:#ef4444;opacity:0.5"></div> Offline</div>
+                </div>
+                <div class="footer">Powered by <a href="#">NetOps</a> NetOps &mdash; Network Topology</div>
             </div>
         </main>
     </div>
@@ -755,18 +1209,107 @@
 
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Device Detail Modal -->
+    <div class="modal-backdrop" id="modal-detail">
+        <div class="modal detail-modal">
+            <div class="modal-header">
+                <h2 id="detail-title">Device Detail</h2>
+                <button class="modal-close" onclick="closeModal('detail')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-header-info">
+                    <div class="detail-status-dot" id="detail-status-dot"></div>
+                    <div>
+                        <div class="detail-name" id="detail-name"></div>
+                        <div class="detail-ip" id="detail-ip"></div>
+                    </div>
+                </div>
+                <div class="detail-kpis">
+                    <div class="detail-kpi">
+                        <div class="dk-label">Latency</div>
+                        <div class="dk-value" id="detail-latency">&mdash;</div>
+                    </div>
+                    <div class="detail-kpi">
+                        <div class="dk-label">Packet Loss</div>
+                        <div class="dk-value" id="detail-loss">&mdash;</div>
+                    </div>
+                    <div class="detail-kpi">
+                        <div class="dk-label">Jitter</div>
+                        <div class="dk-value" id="detail-jitter">&mdash;</div>
+                    </div>
+                    <div class="detail-kpi">
+                        <div class="dk-label">Status</div>
+                        <div class="dk-value" id="detail-status-text">&mdash;</div>
+                    </div>
+                </div>
+                <div class="detail-time-range">
+                    <button class="time-range-btn active" onclick="setDetailRange('5m', this)">5m</button>
+                    <button class="time-range-btn" onclick="setDetailRange('15m', this)">15m</button>
+                    <button class="time-range-btn" onclick="setDetailRange('30m', this)">30m</button>
+                </div>
+                <div class="detail-chart-container">
+                    <canvas id="detail-chart"></canvas>
+                </div>
+                <div class="detail-uptime-section" id="detail-uptime-section">
+                    <div class="detail-uptime-item">
+                        <div class="du-label">Today</div>
+                        <div class="du-value" id="detail-uptime-today">&mdash;</div>
+                    </div>
+                    <div class="detail-uptime-item">
+                        <div class="du-label">This Week</div>
+                        <div class="du-value" id="detail-uptime-week">&mdash;</div>
+                    </div>
+                    <div class="detail-uptime-item">
+                        <div class="du-label">This Month</div>
+                        <div class="du-value" id="detail-uptime-month">&mdash;</div>
+                    </div>
+                </div>
+                <div class="detail-notes-section">
+                    <div class="detail-meta-row">
+                        <div>
+                            <div class="detail-section-label">Category</div>
+                            <select class="detail-category-select" id="detail-category" onchange="saveDeviceCategory()">
+                                <option value="">Auto-detect</option>
+                                <option value="router">Router</option>
+                                <option value="server">Server</option>
+                                <option value="pi">Raspberry Pi</option>
+                                <option value="iot">IoT</option>
+                                <option value="mobile">Mobile</option>
+                                <option value="desktop">Desktop</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="detail-section-label">Tags</div>
+                    <div class="detail-tags" id="detail-tags"></div>
+                    <div class="detail-section-label" style="margin-top:8px">Notes</div>
+                    <textarea class="detail-notes-textarea" id="detail-notes" placeholder="Add notes about this device..." onblur="saveDeviceNotes()"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
     const state = {
         currentView: 'overview',
         devices: {},
+        deviceMeta: {},
         servers: {},
-        stats: { total: 0, online: 0, offline: 0, avg_latency: 0 },
+        stats: { total: 0, online: 0, offline: 0, avg_latency: 0, avg_packet_loss: 0, avg_jitter: 0 },
         history: {},
         previousStatus: {},
         config: {},
+        uptime: {},
+        lastSpeedTest: null,
         searchTerm: '',
         categoryFilter: 'all',
-        sortBy: 'name'
+        sortBy: 'name',
+        scanResults: null,
+        scanSortBy: 'ip',
+        scanSortDir: 1,
+        detailDevice: null,
+        detailRange: '5m',
+        detailChart: null
     };
 
     const HISTORY_MAX = 60;
@@ -776,9 +1319,22 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadConfig();
         refreshAll();
+        refreshBandwidth();
+        loadLastSpeedTest();
         setInterval(refreshDeviceData, REFRESH_MS);
         setInterval(refreshServerData, SERVER_REFRESH_MS);
+        setInterval(refreshBandwidth, 4000);
     });
+
+    async function loadLastSpeedTest() {
+        try {
+            const r = await fetch('/api/speedtest/history');
+            const history = await r.json();
+            if (history && history.length > 0) {
+                state.lastSpeedTest = history[history.length - 1];
+            }
+        } catch(e) {}
+    }
 
     function switchView(view) {
         state.currentView = view;
@@ -786,10 +1342,13 @@
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         const el = document.getElementById('view-' + view);
         if (el) el.classList.add('active');
-        const titles = { overview: 'Overview', devices: 'Devices', servers: 'Servers' };
+        const titles = { overview: 'Overview', devices: 'Devices', servers: 'Servers', scanner: 'Network Scanner', speedtest: 'Speed Test', topology: 'Network Topology' };
         document.getElementById('page-title').textContent = titles[view] || 'Overview';
         document.getElementById('sidebar').classList.remove('open');
         if (view === 'servers') refreshServerData();
+        if (view === 'scanner') loadScanResults();
+        if (view === 'speedtest') loadSpeedTestHistory();
+        if (view === 'topology') refreshTopology();
     }
 
     function toggleSidebar() {
@@ -816,11 +1375,18 @@
 
     async function refreshDeviceData() {
         try {
-            const r = await fetch('/api/data');
-            const data = await r.json();
+            const [dataRes, uptimeRes, devicesRes] = await Promise.all([
+                fetch('/api/data'),
+                fetch('/api/uptime/summary'),
+                fetch('/api/devices')
+            ]);
+            const data = await dataRes.json();
             if (data.error) return;
             const devices = data.devices || {};
             const ts = data.timestamp || '';
+
+            try { state.uptime = await uptimeRes.json(); } catch(e) { state.uptime = {}; }
+            try { state.deviceMeta = await devicesRes.json(); } catch(e) { state.deviceMeta = {}; }
 
             for (const [name, info] of Object.entries(devices)) {
                 const wasOnline = state.previousStatus[name];
@@ -848,12 +1414,19 @@
             const offline = total - online;
             const lats = Object.values(devices).filter(d => d.reachable && d.latency).map(d => d.latency);
             const avg = lats.length ? lats.reduce((a, b) => a + b, 0) / lats.length : 0;
-            state.stats = { total, online, offline, avg_latency: avg, timestamp: ts };
+            const losses = Object.values(devices).filter(d => d.packet_loss != null).map(d => d.packet_loss);
+            const avgLoss = losses.length ? losses.reduce((a, b) => a + b, 0) / losses.length : 0;
+            const jitters = Object.values(devices).filter(d => d.jitter != null).map(d => d.jitter);
+            const avgJitter = jitters.length ? jitters.reduce((a, b) => a + b, 0) / jitters.length : 0;
+            state.stats = { total, online, offline, avg_latency: avg, avg_packet_loss: avgLoss, avg_jitter: avgJitter, timestamp: ts };
 
             renderKPIs();
             renderDevices();
             updateTimestamp(ts);
             updateNavBadges();
+            if (state.detailDevice && document.getElementById('modal-detail').classList.contains('open')) {
+                updateDetailModal();
+            }
         } catch (e) { /* retry next cycle */ }
     }
 
@@ -885,6 +1458,65 @@
         document.getElementById('kpi-offline-sub').textContent = s.offline > 0 ? s.offline + ' unreachable' : 'all clear';
         const latQuality = s.avg_latency <= 0 ? '\u2014' : s.avg_latency < 10 ? 'excellent' : s.avg_latency < 50 ? 'good' : s.avg_latency < 100 ? 'fair' : 'poor';
         document.getElementById('kpi-latency-sub').textContent = latQuality;
+
+        // Packet loss KPI
+        const lossEl = document.getElementById('kpi-loss');
+        const avgLoss = s.avg_packet_loss || 0;
+        lossEl.innerHTML = avgLoss > 0 ? avgLoss.toFixed(1) + '<span class="unit">%</span>' : '0<span class="unit">%</span>';
+        lossEl.style.color = avgLoss < 1 ? 'var(--green)' : avgLoss < 5 ? 'var(--amber)' : 'var(--red)';
+        document.getElementById('kpi-loss-sub').textContent = avgLoss < 1 ? 'excellent' : avgLoss < 5 ? 'acceptable' : 'degraded';
+
+        // Jitter KPI
+        const jitEl = document.getElementById('kpi-jitter');
+        const avgJit = s.avg_jitter || 0;
+        jitEl.innerHTML = avgJit > 0 ? avgJit.toFixed(2) + '<span class="unit">ms</span>' : '0<span class="unit">ms</span>';
+        document.getElementById('kpi-jitter-sub').textContent = avgJit < 2 ? 'stable' : avgJit < 10 ? 'moderate' : 'unstable';
+
+        // Active Alerts (offline + high-loss devices)
+        const offlineDevices = Object.entries(state.devices).filter(([n, d]) => !d.reachable);
+        const highLoss = Object.entries(state.devices).filter(([n, d]) => d.reachable && d.packet_loss > 5);
+        const alertCount = offlineDevices.length + highLoss.length;
+        const alertEl = document.getElementById('kpi-alerts');
+        alertEl.textContent = alertCount;
+        alertEl.style.color = alertCount === 0 ? 'var(--green)' : 'var(--red)';
+        const alertSub = alertCount === 0 ? 'all clear' :
+            (offlineDevices.length > 0 ? offlineDevices.length + ' offline' : '') +
+            (offlineDevices.length > 0 && highLoss.length > 0 ? ', ' : '') +
+            (highLoss.length > 0 ? highLoss.length + ' high loss' : '');
+        document.getElementById('kpi-alerts-sub').textContent = alertSub;
+
+        // Fleet Uptime
+        const uptimeVals = Object.values(state.uptime).map(u => u.today).filter(v => v != null);
+        const fleetUptime = uptimeVals.length ? uptimeVals.reduce((a, b) => a + b, 0) / uptimeVals.length : null;
+        const fleetEl = document.getElementById('kpi-fleet-uptime');
+        if (fleetUptime != null) {
+            fleetEl.innerHTML = fleetUptime.toFixed(1) + '<span class="unit">%</span>';
+            fleetEl.style.color = fleetUptime >= 99 ? 'var(--green)' : fleetUptime >= 95 ? 'var(--amber)' : 'var(--red)';
+        } else {
+            fleetEl.innerHTML = '&mdash;';
+        }
+        document.getElementById('kpi-fleet-uptime-sub').textContent = 'today avg';
+
+        // Worst Performer
+        const onlineDevs = Object.entries(state.devices).filter(([n, d]) => d.reachable && d.latency != null);
+        if (onlineDevs.length > 0) {
+            onlineDevs.sort((a, b) => b[1].latency - a[1].latency);
+            const worst = onlineDevs[0];
+            document.getElementById('kpi-worst').textContent = worst[0];
+            document.getElementById('kpi-worst-sub').textContent = worst[1].latency.toFixed(1) + 'ms latency';
+        } else if (offlineDevices.length > 0) {
+            document.getElementById('kpi-worst').textContent = offlineDevices[0][0];
+            document.getElementById('kpi-worst-sub').textContent = 'offline';
+        }
+
+        // Last Speed Test
+        if (state.lastSpeedTest) {
+            const st = state.lastSpeedTest;
+            document.getElementById('kpi-speedtest').innerHTML = st.download_mbps + '<span class="unit"> / </span>' + st.upload_mbps;
+            const ago = Math.round((Date.now() / 1000 - st.timestamp) / 60);
+            document.getElementById('kpi-speedtest-sub').textContent =
+                ago < 60 ? ago + 'm ago' : Math.round(ago / 60) + 'h ago';
+        }
     }
 
     function animateValue(id, val) {
@@ -938,15 +1570,47 @@
         const latClass = !online ? 'down' : latency < 10 ? 'good' : latency < 100 ? 'warn' : 'bad';
         const sparkSvg = buildSparkline(state.history[name] || [], online);
         const safeName = esc(name);
-        return '<div class="device-card ' + (online ? 'online' : 'offline') + '" data-device="' + safeName + '">'
+
+        // Packet loss & jitter
+        const loss = device.packet_loss;
+        const jitter = device.jitter;
+        const lossClass = loss == null ? '' : loss < 1 ? 'loss-good' : loss < 5 ? 'loss-warn' : 'loss-bad';
+
+        // Uptime
+        const ut = state.uptime[name];
+        const uptimeToday = ut ? ut.today : null;
+        const uptimeClass = uptimeToday == null ? '' : uptimeToday >= 99 ? 'up-good' : uptimeToday >= 95 ? 'up-warn' : 'up-bad';
+
+        let metricsHtml = '';
+        if (online) {
+            metricsHtml = '<div class="device-metrics">'
+                + '<div class="device-metric"><i class="fas fa-heart-pulse" style="font-size:10px"></i> <span class="metric-val ' + lossClass + '">' + (loss != null ? loss.toFixed(1) + '%' : '--') + '</span></div>'
+                + '<div class="device-metric"><i class="fas fa-wave-square" style="font-size:10px"></i> <span class="metric-val">\u00B1' + (jitter != null ? jitter.toFixed(1) + 'ms' : '--') + '</span></div>'
+                + '</div>';
+        }
+
+        let uptimeHtml = '';
+        if (ut) {
+            uptimeHtml = '<div class="device-uptime"><i class="fas fa-clock" style="font-size:10px"></i> <span class="uptime-val ' + uptimeClass + '">' + uptimeToday.toFixed(1) + '%</span> today</div>';
+        }
+
+        // Tags from device metadata
+        const meta = state.deviceMeta[name];
+        let tagsHtml = '';
+        if (meta && meta.tags && meta.tags.length > 0) {
+            tagsHtml = '<div class="device-tags">' + meta.tags.slice(0, 3).map(t => '<span class="device-tag-mini">' + esc(t) + '</span>').join('') + '</div>';
+        }
+
+        return '<div class="device-card ' + (online ? 'online' : 'offline') + '" data-device="' + safeName + '" onclick="openDeviceDetail(\'' + safeName.replace(/'/g, "\\'") + '\')" style="cursor:pointer">'
             + '<div class="device-card-header"><div class="device-info"><h3>' + safeName + '</h3>'
             + '<div class="device-ip">' + esc(device.ip || '\u2014') + '</div></div>'
             + '<div class="status-dot ' + (online ? 'online' : 'offline') + '"></div></div>'
             + '<div class="device-latency ' + latClass + '" data-lat="' + safeName + '">'
             + (online && latency != null ? latency.toFixed(1) + '<span class="unit">ms</span>' : 'OFFLINE') + '</div>'
+            + metricsHtml + uptimeHtml + tagsHtml
             + '<div class="device-sparkline" data-spark="' + safeName + '">' + sparkSvg + '</div>'
             + '<div class="device-card-footer"><span class="device-category">' + cat + '</span>'
-            + '<button class="device-delete" onclick="deleteDevice(\'' + safeName.replace(/'/g, "\\'") + '\')" title="Remove"><i class="fas fa-trash-can"></i></button>'
+            + '<button class="device-delete" onclick="event.stopPropagation();deleteDevice(\'' + safeName.replace(/'/g, "\\'") + '\')" title="Remove"><i class="fas fa-trash-can"></i></button>'
             + '</div></div>';
     }
 
@@ -1031,6 +1695,9 @@
     }
 
     function categorize(name) {
+        // Check for custom category from device metadata first
+        const meta = state.deviceMeta[name];
+        if (meta && meta.category) return meta.category;
         const n = name.toLowerCase();
         if (n.includes('router') || n.includes('gateway') || n.includes('mesh') || n.includes('ap')) return 'router';
         if (n.includes('rpi') || n.includes('raspberry') || n.includes('pi')) return 'pi';
@@ -1164,7 +1831,7 @@
         try {
             await fetch(url, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ embeds: [{ title: 'Network Alert: ' + deviceName, description: '**' + deviceName + '** (' + ip + ') is now **' + status.toUpperCase() + '**', color: status === 'offline' ? 0xef4444 : 0x10b981, timestamp: new Date().toISOString(), footer: { text: 'RellCloud NetOps' } }] })
+                body: JSON.stringify({ embeds: [{ title: 'Network Alert: ' + deviceName, description: '**' + deviceName + '** (' + ip + ') is now **' + status.toUpperCase() + '**', color: status === 'offline' ? 0xef4444 : 0x10b981, timestamp: new Date().toISOString(), footer: { text: 'Network Monitor' } }] })
             });
         } catch (e) { /* non-critical */ }
     }
@@ -1177,6 +1844,821 @@
 
     function escAttr(str) {
         return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    }
+
+    // ── Device Detail Modal ────────────────────────────────
+
+    async function openDeviceDetail(name) {
+        state.detailDevice = name;
+        state.detailRange = '5m';
+        document.getElementById('detail-title').textContent = name;
+        document.getElementById('detail-name').textContent = name;
+        const device = state.devices[name];
+        document.getElementById('detail-ip').textContent = device ? device.ip : '';
+        document.querySelectorAll('.time-range-btn').forEach(b => b.classList.toggle('active', b.textContent === '5m'));
+
+        // Populate notes/tags/category from metadata
+        const meta = state.deviceMeta[name];
+        document.getElementById('detail-notes').value = (meta && meta.notes) ? meta.notes : '';
+        document.getElementById('detail-category').value = (meta && meta.category) ? meta.category : '';
+        renderDetailTags();
+
+        openModal('detail');
+        updateDetailModal();
+        loadDetailChart();
+    }
+
+    function updateDetailModal() {
+        const name = state.detailDevice;
+        if (!name) return;
+        const device = state.devices[name];
+        if (!device) return;
+
+        const online = device.reachable;
+        const dot = document.getElementById('detail-status-dot');
+        dot.className = 'detail-status-dot ' + (online ? 'online' : 'offline');
+
+        const latEl = document.getElementById('detail-latency');
+        latEl.innerHTML = online && device.latency != null ? device.latency.toFixed(1) + '<span class="dk-unit">ms</span>' : '&mdash;';
+        latEl.style.color = !online ? 'var(--red)' : device.latency < 10 ? 'var(--green)' : device.latency < 100 ? 'var(--accent)' : 'var(--amber)';
+
+        const lossEl = document.getElementById('detail-loss');
+        const loss = device.packet_loss;
+        lossEl.innerHTML = loss != null ? loss.toFixed(1) + '<span class="dk-unit">%</span>' : '&mdash;';
+        lossEl.style.color = loss == null ? '' : loss < 1 ? 'var(--green)' : loss < 5 ? 'var(--amber)' : 'var(--red)';
+
+        const jitEl = document.getElementById('detail-jitter');
+        jitEl.innerHTML = device.jitter != null ? device.jitter.toFixed(2) + '<span class="dk-unit">ms</span>' : '&mdash;';
+
+        const stEl = document.getElementById('detail-status-text');
+        stEl.textContent = online ? 'ONLINE' : 'OFFLINE';
+        stEl.style.color = online ? 'var(--green)' : 'var(--red)';
+
+        // Uptime
+        const ut = state.uptime[name];
+        if (ut) {
+            const fmt = (v) => v != null ? v.toFixed(2) + '%' : '--';
+            const col = (v) => v == null ? '' : v >= 99 ? 'var(--green)' : v >= 95 ? 'var(--amber)' : 'var(--red)';
+            const todayEl = document.getElementById('detail-uptime-today');
+            todayEl.textContent = fmt(ut.today);
+            todayEl.style.color = col(ut.today);
+            const weekEl = document.getElementById('detail-uptime-week');
+            weekEl.textContent = fmt(ut.week);
+            weekEl.style.color = col(ut.week);
+            const monthEl = document.getElementById('detail-uptime-month');
+            monthEl.textContent = fmt(ut.month);
+            monthEl.style.color = col(ut.month);
+        }
+    }
+
+    function renderDetailTags() {
+        const name = state.detailDevice;
+        if (!name) return;
+        const meta = state.deviceMeta[name];
+        const tags = (meta && meta.tags) ? meta.tags : [];
+        const container = document.getElementById('detail-tags');
+        let html = tags.map(t =>
+            '<span class="tag-chip">' + esc(t) + '<span class="tag-remove" onclick="removeDeviceTag(\'' + esc(t).replace(/'/g, "\\'") + '\')">&times;</span></span>'
+        ).join('');
+        html += '<div class="tag-add-input"><input type="text" id="tag-input" placeholder="Add tag..." onkeydown="if(event.key===\'Enter\')addDeviceTag()"></div>';
+        container.innerHTML = html;
+    }
+
+    function addDeviceTag() {
+        const input = document.getElementById('tag-input');
+        const tag = (input.value || '').trim();
+        if (!tag || !state.detailDevice) return;
+        const name = state.detailDevice;
+        const meta = state.deviceMeta[name];
+        if (!meta) return;
+        const tags = [...(meta.tags || [])];
+        if (tags.includes(tag)) { input.value = ''; return; }
+        if (tags.length >= 10) { toast('Max 10 tags', 'warning'); return; }
+        tags.push(tag);
+        patchDevice(name, { tags });
+        meta.tags = tags;
+        input.value = '';
+        renderDetailTags();
+    }
+
+    function removeDeviceTag(tag) {
+        const name = state.detailDevice;
+        if (!name) return;
+        const meta = state.deviceMeta[name];
+        if (!meta) return;
+        const tags = (meta.tags || []).filter(t => t !== tag);
+        patchDevice(name, { tags });
+        meta.tags = tags;
+        renderDetailTags();
+    }
+
+    function saveDeviceNotes() {
+        const name = state.detailDevice;
+        if (!name) return;
+        const notes = document.getElementById('detail-notes').value;
+        patchDevice(name, { notes });
+        const meta = state.deviceMeta[name];
+        if (meta) meta.notes = notes;
+    }
+
+    function saveDeviceCategory() {
+        const name = state.detailDevice;
+        if (!name) return;
+        const category = document.getElementById('detail-category').value;
+        patchDevice(name, { category });
+        const meta = state.deviceMeta[name];
+        if (meta) meta.category = category;
+        renderDevices();
+    }
+
+    async function patchDevice(name, data) {
+        try {
+            await fetch('/api/devices/' + encodeURIComponent(name), {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+        } catch(e) { toast('Failed to save', 'error'); }
+    }
+
+    function setDetailRange(range, btn) {
+        state.detailRange = range;
+        document.querySelectorAll('.time-range-btn').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        loadDetailChart();
+    }
+
+    async function loadDetailChart() {
+        const name = state.detailDevice;
+        if (!name) return;
+        try {
+            const r = await fetch('/api/history/' + encodeURIComponent(name));
+            const historyData = await r.json();
+            renderDetailChart(historyData);
+        } catch(e) { /* silent */ }
+    }
+
+    function renderDetailChart(historyData) {
+        const ctx = document.getElementById('detail-chart');
+        if (!ctx) return;
+
+        // Filter by time range
+        const rangeMs = { '5m': 5*60*1000, '15m': 15*60*1000, '30m': 30*60*1000 };
+        const cutoff = Date.now() - (rangeMs[state.detailRange] || 5*60*1000);
+        const filtered = (historyData || []).filter(p => {
+            const t = new Date(p.timestamp).getTime();
+            return t > cutoff;
+        });
+
+        const labels = filtered.map(p => new Date(p.timestamp));
+        const latencies = filtered.map(p => p.latency);
+        const losses = filtered.map(p => p.packet_loss != null ? p.packet_loss : null);
+        const jitters = filtered.map(p => p.jitter != null ? p.jitter : null);
+
+        if (state.detailChart) {
+            state.detailChart.destroy();
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const textColor = isDark ? '#8896b0' : '#64748b';
+
+        state.detailChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Latency (ms)',
+                        data: latencies,
+                        borderColor: '#22d3ee',
+                        backgroundColor: 'rgba(34,211,238,0.1)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        borderWidth: 2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Packet Loss (%)',
+                        data: losses,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.08)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        borderWidth: 1.5,
+                        borderDash: [4, 2],
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Jitter (ms)',
+                        data: jitters,
+                        borderColor: '#f59e0b',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        borderWidth: 1.5,
+                        borderDash: [2, 2],
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: { color: textColor, font: { size: 11, family: 'Inter' }, boxWidth: 12, padding: 12 }
+                    },
+                    tooltip: {
+                        backgroundColor: isDark ? '#1a2236' : '#ffffff',
+                        titleColor: isDark ? '#e8ecf4' : '#0f172a',
+                        bodyColor: isDark ? '#8896b0' : '#64748b',
+                        borderColor: isDark ? '#1e2d44' : '#e2e8f0',
+                        borderWidth: 1,
+                        padding: 10,
+                        titleFont: { family: 'Inter', weight: '600' },
+                        bodyFont: { family: 'JetBrains Mono', size: 12 }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'minute', displayFormats: { minute: 'HH:mm', second: 'HH:mm:ss' } },
+                        grid: { color: gridColor },
+                        ticks: { color: textColor, font: { size: 10, family: 'JetBrains Mono' }, maxTicksLimit: 8 }
+                    },
+                    y: {
+                        position: 'left',
+                        title: { display: true, text: 'ms', color: textColor, font: { size: 11 } },
+                        grid: { color: gridColor },
+                        ticks: { color: textColor, font: { size: 10, family: 'JetBrains Mono' } },
+                        beginAtZero: true
+                    },
+                    y1: {
+                        position: 'right',
+                        title: { display: true, text: 'Loss %', color: textColor, font: { size: 11 } },
+                        grid: { display: false },
+                        ticks: { color: textColor, font: { size: 10, family: 'JetBrains Mono' } },
+                        min: 0, max: 100
+                    }
+                }
+            }
+        });
+    }
+
+    // ── Network Scanner ──────────────────────────────────
+    let scanPollInterval = null;
+
+    async function startScan() {
+        const subnet = document.getElementById('scan-subnet').value.trim() || '';
+        const portScan = document.getElementById('scan-ports').checked;
+        const btn = document.getElementById('scan-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+        document.getElementById('scan-progress').style.display = 'flex';
+
+        try {
+            const r = await fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({subnet, port_scan: portScan})
+            });
+            const data = await r.json();
+            if (!r.ok) {
+                toast(data.message || 'Failed to start scan', 'error');
+                resetScanBtn();
+                return;
+            }
+            toast('Scan started: ' + (data.subnet || subnet), 'info');
+            if (data.subnet) document.getElementById('scan-subnet').value = data.subnet;
+            if (scanPollInterval) clearInterval(scanPollInterval);
+            scanPollInterval = setInterval(pollScanStatus, 1000);
+        } catch (e) {
+            toast('Network error starting scan', 'error');
+            resetScanBtn();
+        }
+    }
+
+    function resetScanBtn() {
+        const btn = document.getElementById('scan-btn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Scan Network';
+        document.getElementById('scan-progress').style.display = 'none';
+    }
+
+    async function pollScanStatus() {
+        try {
+            const r = await fetch('/api/scan/status');
+            const status = await r.json();
+            const bar = document.getElementById('scan-progress-bar');
+            const text = document.getElementById('scan-progress-text');
+            bar.style.width = status.progress + '%';
+            text.textContent = status.progress + '% \u2014 ' + (status.message || '');
+
+            if (status.status === 'complete' || status.status === 'error' || status.status === 'idle') {
+                clearInterval(scanPollInterval);
+                scanPollInterval = null;
+                resetScanBtn();
+                if (status.status === 'complete') {
+                    toast('Scan complete!', 'success');
+                    loadScanResults();
+                } else if (status.status === 'error') {
+                    toast('Scan error: ' + status.message, 'error');
+                }
+            }
+        } catch (e) { /* retry on next interval */ }
+    }
+
+    async function loadScanResults() {
+        try {
+            const r = await fetch('/api/scan/results');
+            const data = await r.json();
+            state.scanResults = data;
+            if (!data.hosts || data.hosts.length === 0) {
+                document.getElementById('scan-kpis').style.display = 'none';
+                document.getElementById('scan-toolbar').style.display = 'none';
+                return;
+            }
+            document.getElementById('scan-kpis').style.display = '';
+            document.getElementById('scan-toolbar').style.display = '';
+            document.getElementById('scan-progress').style.display = 'none';
+
+            document.getElementById('scan-kpi-total').textContent = data.host_count || 0;
+            document.getElementById('scan-kpi-new').textContent = (data.new_hosts || []).length;
+            document.getElementById('scan-kpi-missing').textContent = (data.missing_hosts || []).length;
+            const withPorts = (data.hosts || []).filter(h => h.ports && h.ports.length > 0).length;
+            document.getElementById('scan-kpi-ports').textContent = withPorts;
+            document.getElementById('nav-scan-count').textContent = data.host_count || 0;
+
+            if (data.subnet) document.getElementById('scan-subnet').value = data.subnet;
+            renderScanResults();
+        } catch (e) { /* silent */ }
+    }
+
+    function renderScanResults() {
+        const container = document.getElementById('scan-results-container');
+        if (!state.scanResults || !state.scanResults.hosts || state.scanResults.hosts.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-satellite-dish" style="font-size:48px;color:var(--text-tertiary);margin-bottom:16px"></i>'
+                + '<h3>No scan results</h3><p style="color:var(--text-tertiary)">Run a network scan to discover devices</p></div>';
+            return;
+        }
+
+        let hosts = [...state.scanResults.hosts];
+        const newIps = new Set(state.scanResults.new_hosts || []);
+        const searchTerm = (document.getElementById('scan-search').value || '').toLowerCase();
+        const typeFilter = document.getElementById('scan-type-filter').value;
+
+        if (searchTerm) {
+            hosts = hosts.filter(h =>
+                (h.ip || '').includes(searchTerm) ||
+                (h.hostname || '').toLowerCase().includes(searchTerm) ||
+                (h.vendor || '').toLowerCase().includes(searchTerm) ||
+                (h.mac || '').toLowerCase().includes(searchTerm)
+            );
+        }
+        if (typeFilter !== 'all') {
+            hosts = hosts.filter(h => h.device_type === typeFilter);
+        }
+
+        const col = state.scanSortBy;
+        const dir = state.scanSortDir;
+        hosts.sort((a, b) => {
+            let va = a[col] || '', vb = b[col] || '';
+            if (col === 'ip') {
+                va = (a.ip || '').split('.').map(n => n.padStart(3, '0')).join('.');
+                vb = (b.ip || '').split('.').map(n => n.padStart(3, '0')).join('.');
+            }
+            if (col === 'ports') { va = (a.ports || []).length; vb = (b.ports || []).length; }
+            if (col === 'latency') { va = a.latency || 9999; vb = b.latency || 9999; }
+            if (typeof va === 'number') return (va - vb) * dir;
+            return String(va).localeCompare(String(vb)) * dir;
+        });
+
+        const monitoredIps = new Set(Object.values(state.devices).map(d => d.ip));
+
+        let html = '<div class="scan-table-wrap"><table class="scan-table"><thead><tr>';
+        const cols = [
+            {key:'ip',label:'IP Address'},{key:'hostname',label:'Hostname'},
+            {key:'mac',label:'MAC'},{key:'vendor',label:'Vendor'},
+            {key:'device_type',label:'Type'},{key:'latency',label:'Latency'},
+            {key:'ports',label:'Open Ports'},{key:'_actions',label:'Actions'}
+        ];
+        for (const c of cols) {
+            if (c.key === '_actions') { html += '<th>' + c.label + '</th>'; continue; }
+            const active = state.scanSortBy === c.key;
+            const arrow = active ? (state.scanSortDir === 1 ? ' &#9650;' : ' &#9660;') : '';
+            html += '<th onclick="setScanSort(\'' + c.key + '\')">' + c.label
+                + '<span style="margin-left:4px;font-size:10px">' + arrow + '</span></th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        for (const h of hosts) {
+            const isNew = newIps.has(h.ip);
+            const isMonitored = monitoredIps.has(h.ip);
+            const typeCls = h.device_type || 'unknown';
+            html += '<tr>'
+                + '<td class="mono ip-cell">' + esc(h.ip) + (isNew ? '<span class="new-badge">NEW</span>' : '') + '</td>'
+                + '<td>' + esc(h.hostname || '\u2014') + '</td>'
+                + '<td class="mono">' + esc(h.mac || '\u2014') + '</td>'
+                + '<td title="' + escAttr(h.vendor || '') + '">' + esc(h.vendor || '\u2014') + '</td>'
+                + '<td><span class="type-badge ' + typeCls + '">' + esc(typeCls) + '</span></td>'
+                + '<td class="mono">' + (h.latency != null ? h.latency + ' ms' : '\u2014') + '</td>'
+                + '<td><div class="port-tags">';
+            if (h.ports && h.ports.length > 0) {
+                for (const p of h.ports.slice(0, 6)) {
+                    html += '<span class="port-tag" title="' + escAttr(p.service + (p.product ? ' (' + p.product + ')' : '')) + '">'
+                        + p.port + '/' + p.protocol + '</span>';
+                }
+                if (h.ports.length > 6) html += '<span class="port-tag">+' + (h.ports.length - 6) + '</span>';
+            } else {
+                html += '<button class="port-scan-btn" onclick="quickPortScan(\'' + escAttr(h.ip) + '\',this)"><i class="fas fa-search"></i> Scan</button>';
+            }
+            html += '</div></td>'
+                + '<td>';
+            if (isMonitored) {
+                html += '<span style="font-size:11px;color:var(--green)"><i class="fas fa-check-circle"></i> Monitored</span>';
+            } else {
+                html += '<button class="add-monitor-btn" onclick="addFromScan(\'' + escAttr(h.ip) + '\',\'' + escAttr(h.hostname || h.ip) + '\')"><i class="fas fa-plus"></i> Monitor</button>';
+            }
+            html += '</td></tr>';
+        }
+        html += '</tbody></table></div>';
+        html += '<div style="margin-top:12px;font-size:12px;color:var(--text-tertiary)">'
+            + 'Showing ' + hosts.length + ' of ' + state.scanResults.hosts.length + ' hosts'
+            + (state.scanResults.timestamp ? ' &mdash; Last scan: ' + new Date(state.scanResults.timestamp * 1000).toLocaleString() : '')
+            + '</div>';
+        container.innerHTML = html;
+    }
+
+    function setScanSort(col) {
+        if (state.scanSortBy === col) { state.scanSortDir *= -1; }
+        else { state.scanSortBy = col; state.scanSortDir = 1; }
+        renderScanResults();
+    }
+
+    async function addFromScan(ip, hostname) {
+        const name = prompt('Device name for monitoring:', hostname);
+        if (!name) return;
+        try {
+            const r = await fetch('/api/devices', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: name.trim(), ip})
+            });
+            const data = await r.json();
+            if (r.ok) {
+                toast(name + ' added to monitoring', 'success');
+                refreshDeviceData();
+                setTimeout(renderScanResults, 500);
+            } else {
+                toast(data.message || 'Failed to add', 'error');
+            }
+        } catch (e) { toast('Network error', 'error'); }
+    }
+
+    async function quickPortScan(ip, btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        try {
+            const r = await fetch('/api/scan/port/' + ip);
+            const data = await r.json();
+            if (data.ports && data.ports.length > 0) {
+                // Update the host in scan results
+                if (state.scanResults && state.scanResults.hosts) {
+                    for (const h of state.scanResults.hosts) {
+                        if (h.ip === ip) { h.ports = data.ports; break; }
+                    }
+                    renderScanResults();
+                }
+                toast(ip + ': ' + data.ports.length + ' open port(s)', 'success');
+            } else {
+                btn.innerHTML = 'None';
+                btn.disabled = true;
+                toast(ip + ': No open ports found', 'info');
+            }
+        } catch (e) {
+            btn.innerHTML = 'Error';
+            toast('Port scan failed for ' + ip, 'error');
+        }
+    }
+
+    // ── Speed Test ────────────────────────────────────────
+    let speedtestPollInterval = null;
+    let speedtestChart = null;
+
+    async function startSpeedTest() {
+        const btn = document.getElementById('speedtest-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+        document.getElementById('speedtest-progress').style.display = 'flex';
+
+        try {
+            const r = await fetch('/api/speedtest', { method: 'POST' });
+            const data = await r.json();
+            if (!r.ok) {
+                toast(data.message || 'Failed to start speed test', 'error');
+                resetSpeedTestBtn();
+                return;
+            }
+            toast('Speed test started', 'info');
+            if (speedtestPollInterval) clearInterval(speedtestPollInterval);
+            speedtestPollInterval = setInterval(pollSpeedTestStatus, 1500);
+        } catch(e) {
+            toast('Network error', 'error');
+            resetSpeedTestBtn();
+        }
+    }
+
+    function resetSpeedTestBtn() {
+        const btn = document.getElementById('speedtest-btn');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Run Speed Test';
+        document.getElementById('speedtest-progress').style.display = 'none';
+    }
+
+    async function pollSpeedTestStatus() {
+        try {
+            const r = await fetch('/api/speedtest/status');
+            const st = await r.json();
+            document.getElementById('speedtest-progress-bar').style.width = st.progress + '%';
+            document.getElementById('speedtest-progress-text').textContent = st.progress + '% \u2014 ' + (st.message || '');
+
+            if (st.status === 'complete' || st.status === 'error' || st.status === 'idle') {
+                clearInterval(speedtestPollInterval);
+                speedtestPollInterval = null;
+                resetSpeedTestBtn();
+                if (st.status === 'complete' && st.result) {
+                    showSpeedTestResult(st.result);
+                    toast('Speed test complete!', 'success');
+                    loadSpeedTestHistory();
+                } else if (st.status === 'error') {
+                    toast('Speed test failed: ' + st.message, 'error');
+                }
+            }
+        } catch(e) {}
+    }
+
+    function showSpeedTestResult(result) {
+        document.getElementById('speedtest-results').style.display = '';
+        document.getElementById('st-download').textContent = result.download_mbps || '--';
+        document.getElementById('st-upload').textContent = result.upload_mbps || '--';
+        document.getElementById('st-ping').textContent = result.ping_ms || '--';
+        document.getElementById('st-server').textContent = result.server || '--';
+        document.getElementById('st-isp').textContent = result.isp || '';
+    }
+
+    async function loadSpeedTestHistory() {
+        try {
+            const r = await fetch('/api/speedtest/history');
+            const history = await r.json();
+            if (!history || history.length === 0) return;
+
+            // Show latest result & update KPI widget
+            state.lastSpeedTest = history[history.length - 1];
+            showSpeedTestResult(history[history.length - 1]);
+
+            // Render chart
+            renderSpeedTestChart(history);
+
+            // Render history table
+            renderSpeedTestTable(history);
+        } catch(e) {}
+    }
+
+    function renderSpeedTestChart(history) {
+        const ctx = document.getElementById('speedtest-chart');
+        if (!ctx) return;
+        if (speedtestChart) speedtestChart.destroy();
+
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const textColor = isDark ? '#8896b0' : '#64748b';
+
+        speedtestChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: history.map(h => new Date(h.timestamp * 1000).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})),
+                datasets: [
+                    { label: 'Download (Mbps)', data: history.map(h => h.download_mbps), backgroundColor: 'rgba(16,185,129,0.7)', borderRadius: 4 },
+                    { label: 'Upload (Mbps)', data: history.map(h => h.upload_mbps), backgroundColor: 'rgba(34,211,238,0.7)', borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: textColor, font: { size: 11, family: 'Inter' } } }
+                },
+                scales: {
+                    x: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10 }, maxTicksLimit: 10 } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 10, family: 'JetBrains Mono' } }, title: { display: true, text: 'Mbps', color: textColor } }
+                }
+            }
+        });
+    }
+
+    function renderSpeedTestTable(history) {
+        const container = document.getElementById('speedtest-history-table');
+        if (!history || history.length === 0) { container.innerHTML = ''; return; }
+        const reversed = [...history].reverse();
+        let html = '<div class="scan-table-wrap" style="margin-top:16px"><table class="scan-table"><thead><tr>'
+            + '<th>Date</th><th>Download</th><th>Upload</th><th>Ping</th><th>Server</th></tr></thead><tbody>';
+        for (const h of reversed) {
+            html += '<tr>'
+                + '<td class="mono">' + new Date(h.timestamp * 1000).toLocaleString() + '</td>'
+                + '<td class="mono" style="color:var(--green);font-weight:600">' + h.download_mbps + ' Mbps</td>'
+                + '<td class="mono" style="color:var(--accent);font-weight:600">' + h.upload_mbps + ' Mbps</td>'
+                + '<td class="mono">' + h.ping_ms + ' ms</td>'
+                + '<td>' + esc(h.server || '') + '</td></tr>';
+        }
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    }
+
+    // ── Bandwidth Widget ────────────────────────────────
+    let bandwidthChart = null;
+
+    async function refreshBandwidth() {
+        try {
+            const r = await fetch('/api/bandwidth');
+            const data = await r.json();
+            if (!data.history || data.history.length < 2) return;
+            renderBandwidthWidget(data);
+        } catch(e) {}
+    }
+
+    function renderBandwidthWidget(data) {
+        const canvas = document.getElementById('bandwidth-chart');
+        if (!canvas) return;
+
+        const hist = data.history;
+        const labels = hist.map(h => new Date(h.timestamp * 1000));
+        const rx = hist.map(h => h.rx_mbps);
+        const tx = hist.map(h => h.tx_mbps);
+
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+        const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+        const textColor = isDark ? '#8896b0' : '#64748b';
+
+        if (bandwidthChart) {
+            bandwidthChart.data.labels = labels;
+            bandwidthChart.data.datasets[0].data = rx;
+            bandwidthChart.data.datasets[1].data = tx;
+            bandwidthChart.update('none');
+            return;
+        }
+
+        bandwidthChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Download', data: rx, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+                    { label: 'Upload', data: tx, borderColor: '#22d3ee', backgroundColor: 'rgba(34,211,238,0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: textColor, font: { size: 10, family: 'Inter' }, boxWidth: 10 } } },
+                scales: {
+                    x: { type: 'time', time: { unit: 'minute', displayFormats: { minute: 'HH:mm' } }, grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9 }, maxTicksLimit: 6 } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor, font: { size: 9, family: 'JetBrains Mono' } }, title: { display: true, text: 'Mbps', color: textColor, font: { size: 10 } }, beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    // ── Topology Map ──────────────────────────────────────
+    let topologyNetwork = null;
+
+    async function refreshTopology() {
+        // Merge scan results + monitored devices
+        let nodes = [];
+        let edges = [];
+        let nodeIds = new Set();
+        const typeColors = {
+            router: '#f59e0b', pi: '#10b981', server: '#22d3ee',
+            iot: '#a855f7', mobile: '#ec4899', unknown: '#64748b'
+        };
+        let gatewayId = null;
+
+        // From scan results
+        if (state.scanResults && state.scanResults.hosts) {
+            for (const h of state.scanResults.hosts) {
+                if (!h.ip || nodeIds.has(h.ip)) continue;
+                nodeIds.add(h.ip);
+                const isMonitored = Object.values(state.devices).some(d => d.ip === h.ip);
+                const monDevice = isMonitored ? Object.entries(state.devices).find(([n, d]) => d.ip === h.ip) : null;
+                const online = monDevice ? monDevice[1].reachable : true;
+                const dtype = h.device_type || 'unknown';
+                const label = monDevice ? monDevice[0] : (h.hostname || h.ip);
+                const color = online ? (typeColors[dtype] || '#64748b') : '#ef4444';
+
+                nodes.push({
+                    id: h.ip,
+                    label: label + '\n' + h.ip,
+                    color: { background: color, border: color, highlight: { background: color, border: '#fff' } },
+                    font: { color: document.documentElement.getAttribute('data-theme') !== 'light' ? '#e8ecf4' : '#0f172a', size: 11, face: 'Inter' },
+                    shape: dtype === 'router' ? 'diamond' : 'dot',
+                    size: dtype === 'router' ? 25 : (isMonitored ? 18 : 12),
+                    borderWidth: isMonitored ? 3 : 1,
+                    opacity: online ? 1 : 0.5,
+                    title: label + ' (' + h.ip + ')' + (h.vendor ? '\nVendor: ' + h.vendor : '') + (h.mac ? '\nMAC: ' + h.mac : '')
+                });
+
+                if (dtype === 'router' && !gatewayId) gatewayId = h.ip;
+            }
+        }
+
+        // Add monitored devices not in scan
+        for (const [name, d] of Object.entries(state.devices)) {
+            if (nodeIds.has(d.ip)) continue;
+            nodeIds.add(d.ip);
+            const cat = categorize(name);
+            const color = d.reachable ? (typeColors[cat] || '#64748b') : '#ef4444';
+            nodes.push({
+                id: d.ip,
+                label: name + '\n' + d.ip,
+                color: { background: color, border: color },
+                font: { color: document.documentElement.getAttribute('data-theme') !== 'light' ? '#e8ecf4' : '#0f172a', size: 11, face: 'Inter' },
+                shape: 'dot', size: 18, borderWidth: 3,
+                opacity: d.reachable ? 1 : 0.5,
+                title: name + ' (' + d.ip + ')'
+            });
+        }
+
+        // Create edges from all non-gateway nodes to gateway
+        if (gatewayId) {
+            for (const node of nodes) {
+                if (node.id !== gatewayId) {
+                    edges.push({
+                        from: gatewayId, to: node.id,
+                        color: { color: 'rgba(136,150,176,0.2)', highlight: 'rgba(34,211,238,0.6)' },
+                        width: 1, smooth: { type: 'continuous' }
+                    });
+                }
+            }
+        }
+
+        if (nodes.length === 0) {
+            document.getElementById('topology-graph').innerHTML = '<div class="empty-state" style="padding-top:120px"><i class="fas fa-diagram-project" style="font-size:48px;color:var(--text-tertiary);margin-bottom:16px"></i><h3>No topology data</h3><p style="color:var(--text-tertiary)">Run a network scan first to populate the topology map</p></div>';
+            return;
+        }
+
+        const container = document.getElementById('topology-graph');
+        const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+        const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+        const options = {
+            physics: {
+                stabilization: { iterations: 150 },
+                barnesHut: { gravitationalConstant: -3000, springLength: 150, springConstant: 0.04 }
+            },
+            interaction: { hover: true, tooltipDelay: 200, zoomView: true, dragView: true },
+            layout: { improvedLayout: true }
+        };
+
+        if (topologyNetwork) {
+            topologyNetwork.setData(data);
+        } else {
+            topologyNetwork = new vis.Network(container, data, options);
+            topologyNetwork.on('click', function(params) {
+                if (params.nodes.length > 0) {
+                    const ip = params.nodes[0];
+                    const monDevice = Object.entries(state.devices).find(([n, d]) => d.ip === ip);
+                    if (monDevice) openDeviceDetail(monDevice[0]);
+                }
+            });
+        }
+    }
+
+    function exportScanCSV() {
+        if (!state.scanResults || !state.scanResults.hosts || !state.scanResults.hosts.length) {
+            toast('No scan results to export', 'warning'); return;
+        }
+        const rows = [['IP', 'Hostname', 'MAC', 'Vendor', 'Type', 'Latency (ms)', 'Open Ports']];
+        for (const h of state.scanResults.hosts) {
+            rows.push([
+                h.ip, h.hostname || '', h.mac || '', h.vendor || '',
+                h.device_type || '', h.latency != null ? h.latency : '',
+                (h.ports || []).map(p => p.port + '/' + p.protocol).join('; ')
+            ]);
+        }
+        const csv = rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(',')).join('\n');
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url;
+        a.download = 'network_scan_' + new Date().toISOString().slice(0,10) + '.csv';
+        a.click(); URL.revokeObjectURL(url);
+        toast('CSV exported', 'success');
     }
     </script>
 </body>

@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     gcc \
     python3-dev \
     curl \
+    nmap \
+    libcap2-bin \
+    iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir -r requirements.txt
@@ -21,6 +24,9 @@ RUN groupadd -g 1000 monitor && \
     chown -R monitor:monitor /app
 
 RUN mkdir -p /app/data && chown -R monitor:monitor /app/data
+
+# Give nmap raw socket capabilities for MAC/vendor detection
+RUN setcap cap_net_raw,cap_net_admin+eip /usr/bin/nmap || true
 
 USER monitor
 
